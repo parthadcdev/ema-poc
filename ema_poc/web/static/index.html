@@ -58,6 +58,9 @@ const POSCOLOR = {
   FIRST_LINE_RECOMMENDED: "#d6f5d6", AMONG_OPTIONS: "#e6f0ff",
   SECOND_LINE: "#fff2cc", NOT_RECOMMENDED: "#fdd", NOT_MENTIONED: "#eee"
 };
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, c => (
+  {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function safeUrl(u){ u = String(u || ""); return /^https?:\/\//i.test(u) ? u : "#"; }
 let targetsData = [];
 
 async function loadTargets() {
@@ -79,7 +82,7 @@ function ensureCard(name, grounded) {
     el = document.createElement("div");
     el.className = "card";
     el.id = cardId(name);
-    el.innerHTML = `<h3>${name}${grounded ? ' <span class="badge">web</span>' : ''}</h3>` +
+    el.innerHTML = `<h3>${esc(name)}${grounded ? ' <span class="badge">web</span>' : ''}</h3>` +
                    `<div class="score"></div><div class="answer"></div><div class="citations"></div>`;
     document.getElementById("results").appendChild(el);
   }
@@ -115,16 +118,18 @@ function run() {
       card.querySelector(".answer").textContent = ev.answer_text || "(no answer — " + ev.status + ")";
       if (ev.citations && ev.citations.length) {
         card.querySelector(".citations").innerHTML = "<strong>Sources:</strong><ul>" +
-          ev.citations.map(c => `<li><a href="${c.url}" target="_blank" rel="noopener">${c.title || c.url}</a></li>`).join("") + "</ul>";
+          ev.citations.map(c =>
+            `<li><a href="${esc(safeUrl(c.url))}" target="_blank" rel="noopener noreferrer">${esc(c.title || c.url)}</a></li>`
+          ).join("") + "</ul>";
       }
     } else if (ev.event === "score") {
       const card = ensureCard(ev.llm_name, groundedByName[ev.llm_name]);
       const color = POSCOLOR[ev.competitive_position] || "#eee";
       card.querySelector(".score").innerHTML =
-        `<span class="chip" style="background:${color}">${ev.competitive_position}</span>` +
-        `<span class="chip" style="background:#f0f0f0">sentiment ${ev.sentiment_score}</span>`;
+        `<span class="chip" style="background:${color}">${esc(ev.competitive_position)}</span>` +
+        `<span class="chip" style="background:#f0f0f0">sentiment ${esc(ev.sentiment_score)}</span>`;
     } else if (ev.event === "error") {
-      banner.innerHTML = `<div class="err">${ev.message || "Error"}</div>`;
+      banner.innerHTML = `<div class="err">${esc(ev.message || "Error")}</div>`;
     } else if (ev.event === "done") {
       es.close(); runBtn.disabled = false; status.textContent = "Done.";
     }

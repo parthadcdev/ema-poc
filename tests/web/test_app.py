@@ -70,3 +70,14 @@ def test_index_contains_playground_markers(tmp_path):
     assert "EventSource" in html
     assert "/api/ask/stream" in html
     assert "/api/targets" in html
+
+
+def test_index_has_xss_escaping_helpers(tmp_path):
+    from fastapi.testclient import TestClient
+    app = create_app(_deps(tmp_path))
+    html = TestClient(app).get("/").text
+    assert "function esc(" in html
+    assert "function safeUrl(" in html
+    # citations and message must not interpolate raw values
+    assert "esc(c.title" in html
+    assert "safeUrl(c.url" in html
