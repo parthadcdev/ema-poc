@@ -155,3 +155,59 @@ def list_questions(
     sql.append("ORDER BY q.question_id")
     rows = conn.execute("\n".join(sql), params).fetchall()
     return [_question_from_row(r) for r in rows]
+
+
+def update_question(
+    conn: sqlite3.Connection, question_id: str, *, now: str | None = None, **changes
+) -> Question:
+    """Write a new version with `changes` applied. `created_at` is preserved
+    from the current version; `updated_at` is set to `now`. Raises KeyError if
+    the question does not exist."""
+    current = get_current(conn, question_id)
+    if current is None:
+        raise KeyError(f"No such question: {question_id}")
+    data = current.model_dump()
+    data.update(changes)
+    data["version"] = current.version + 1
+    data["updated_at"] = now or _now_iso()
+    new = Question(**data)  # re-validates the applied changes
+    _insert_version(conn, new)
+    return get_version(conn, question_id, new.version)
+
+
+def deactivate_question(
+    conn: sqlite3.Connection, question_id: str, *, now: str | None = None
+) -> Question:
+    return update_question(conn, question_id, active=False, now=now)
+
+
+def approve_question(
+    conn: sqlite3.Connection,
+    question_id: str,
+    approver_name: str,
+    *,
+    now: str | None = None,
+) -> Question:
+    return update_question(
+        conn,
+        question_id,
+        approval_status="APPROVED",
+        approver_name=approver_name,
+        now=now,
+    )
+
+
+def reject_question(
+    conn: sqlite3.Connection,
+    question_id: str,
+    approver_name: str,
+    *,
+    now: str | None = None,
+) -> Question:
+    return update_question(
+        conn,
+        question_id,
+        approval_status="REJECTED",
+        approver_name=approver_name,
+        now=now,
+    )
