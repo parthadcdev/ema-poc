@@ -62,3 +62,13 @@ def test_detect_change_no_previous_returns_unchanged(tmp_path):
     assert change.previous_text is None
     assert change.current_text == "first ever"
     conn.close()
+
+
+def test_detect_change_no_responses_at_all(tmp_path):
+    conn = _conn(tmp_path)
+    change = detect_change(conn, "Q-none", "GPT-4o")
+    assert change.changed is False
+    assert change.previous_text is None
+    assert change.current_text is None
+    assert change.diff == ""
+    conn.close()

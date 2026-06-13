@@ -46,3 +46,12 @@ def test_export_csv_empty_list_writes_header_only(tmp_path):
     lines = path.read_text().splitlines()
     assert len(lines) == 1  # header row only
     assert "response_id" in lines[0]
+
+
+def test_export_csv_quotes_commas_and_embedded_quotes(tmp_path):
+    path = tmp_path / "q.csv"
+    tricky = 'He said, "Drug X" is first-line.\nSecond line.'
+    export_csv([_resp("a", text=tricky)], str(path))
+    with open(path, newline="", encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+    assert rows[0]["response_text"] == tricky  # comma, quotes, and newline survive

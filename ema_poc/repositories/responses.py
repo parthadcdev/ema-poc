@@ -1,7 +1,7 @@
-"""Response Repository — immutable response writes + resumability (FR-3, FR-504).
-
-This phase provides the WRITE path and the resumability query only; the rich
-query-by-any-combination / export / diff surface is Phase 4."""
+"""Response Repository — immutable response writes, resumability, and the read
+surface: query-by-any-combination, pagination, and change detection
+(FR-3, FR-303/304/306/307, FR-504). CSV/JSON export lives in ema_poc/export.py
+(FR-305)."""
 
 from __future__ import annotations
 
@@ -210,7 +210,9 @@ def count_responses(conn: sqlite3.Connection, **filters) -> int:
 @dataclass
 class ResponseChange:
     """Change detection result for a (question_id, llm_name) pair (FR-306,
-    BR-004). `changed` is False when there is no previous response."""
+    BR-004). `changed` is False when there is no previous response; both
+    `previous_text` and `current_text` are None when the pair has no responses
+    at all."""
 
     question_id: str
     llm_name: str

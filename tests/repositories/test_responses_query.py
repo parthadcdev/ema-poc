@@ -108,3 +108,13 @@ def test_pagination_and_count(tmp_path):
     assert [r.response_id for r in page2] == ["r2"]
     assert count_responses(conn, llm="Gemini") == 0
     conn.close()
+
+
+def test_combined_filters_apply_as_and(tmp_path):
+    conn = _conn(tmp_path)
+    _save(conn, "a", llm="GPT-4o", domain="Safety")
+    _save(conn, "b", llm="GPT-4o", domain="Efficacy")
+    _save(conn, "c", llm="Gemini", domain="Safety")
+    got = [r.response_id for r in query_responses(conn, llm="GPT-4o", domain="Safety")]
+    assert got == ["a"]  # only the row matching BOTH filters
+    conn.close()
