@@ -1,3 +1,139 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>EMA Playground</title></head>
-<body><h1>EMA Playground</h1><p id="placeholder">UI loads here.</p></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EMA Playground</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #1a1a1a; }
+  header { background: #1f2a44; color: #fff; padding: 1rem 1.5rem; }
+  header h1 { margin: 0; font-size: 1.15rem; }
+  main { max-width: 1100px; margin: 1.5rem auto; padding: 0 1rem; }
+  .panel { background: #fff; border: 1px solid #e3e6eb; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.25rem; }
+  textarea { width: 100%; box-sizing: border-box; min-height: 64px; font: inherit; padding: .5rem; }
+  .row { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; margin-top: .75rem; }
+  label { font-size: .85rem; }
+  .targets label { margin-right: 1rem; white-space: nowrap; }
+  button { background: #2d6cdf; color: #fff; border: 0; border-radius: 6px; padding: .55rem 1.1rem; font: inherit; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  .note { font-size: .78rem; color: #6b7280; margin-top: .5rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; }
+  .card { background: #fff; border: 1px solid #e3e6eb; border-radius: 8px; padding: 1rem; }
+  .card h3 { margin: 0 0 .25rem; font-size: 1rem; }
+  .badge { font-size: .7rem; background: #eef2ff; color: #3949ab; border-radius: 10px; padding: .1rem .5rem; margin-left: .4rem; }
+  .chip { display: inline-block; font-size: .78rem; border-radius: 12px; padding: .15rem .6rem; margin-right: .4rem; }
+  .answer { white-space: pre-wrap; font-size: .9rem; margin: .5rem 0; }
+  .citations { font-size: .8rem; border-top: 1px solid #eee; padding-top: .5rem; }
+  .citations a { color: #2d6cdf; }
+  .err { background: #fdecea; color: #8a1c1c; padding: .6rem .9rem; border-radius: 6px; }
+  .spinner { font-size: .8rem; color: #6b7280; }
+</style>
+</head>
+<body>
+<header><h1>Evidence Monitoring &mdash; Real-Time Playground</h1></header>
+<main>
+  <div class="panel">
+    <textarea id="question" placeholder="Ask any question (do NOT enter PII/PHI)&hellip;"></textarea>
+    <div class="row">
+      <label>Persona:
+        <select id="persona">
+          <option value="">(default)</option>
+          <option>Prospect</option><option>Provider</option><option>Patient</option>
+        </select>
+      </label>
+      <label>Brand focus: <input id="brand" type="text" placeholder="e.g. Skyrizi" size="14"></label>
+    </div>
+    <div class="row targets" id="targets"></div>
+    <div class="row">
+      <button id="run">Run</button>
+      <span id="status" class="spinner"></span>
+    </div>
+    <div class="note">Sandbox mode &mdash; results are stored separately from the approval-gated monitoring data and never feed the official dashboard. Do not enter PII/PHI (SE-001).</div>
+  </div>
+  <div id="banner"></div>
+  <div class="grid" id="results"></div>
+</main>
+<script>
+const POSCOLOR = {
+  FIRST_LINE_RECOMMENDED: "#d6f5d6", AMONG_OPTIONS: "#e6f0ff",
+  SECOND_LINE: "#fff2cc", NOT_RECOMMENDED: "#fdd", NOT_MENTIONED: "#eee"
+};
+let targetsData = [];
+
+async function loadTargets() {
+  const res = await fetch("/api/targets");
+  const data = await res.json();
+  targetsData = data.targets;
+  const box = document.getElementById("targets");
+  box.innerHTML = targetsData.map(t =>
+    `<label><input type="checkbox" class="tgt" value="${t.name}" checked> ${t.name}` +
+    (t.grounded ? ' <span class="badge">web</span>' : '') + `</label>`
+  ).join("");
+}
+
+function cardId(name){ return "card-" + name.replace(/[^a-zA-Z0-9]/g, "_"); }
+
+function ensureCard(name, grounded) {
+  let el = document.getElementById(cardId(name));
+  if (!el) {
+    el = document.createElement("div");
+    el.className = "card";
+    el.id = cardId(name);
+    el.innerHTML = `<h3>${name}${grounded ? ' <span class="badge">web</span>' : ''}</h3>` +
+                   `<div class="score"></div><div class="answer"></div><div class="citations"></div>`;
+    document.getElementById("results").appendChild(el);
+  }
+  return el;
+}
+
+function run() {
+  const q = document.getElementById("question").value.trim();
+  const banner = document.getElementById("banner");
+  banner.innerHTML = "";
+  if (!q) { banner.innerHTML = '<div class="err">Please enter a question.</div>'; return; }
+  document.getElementById("results").innerHTML = "";
+  const persona = document.getElementById("persona").value;
+  const brand = document.getElementById("brand").value.trim();
+  const chosen = Array.from(document.querySelectorAll(".tgt:checked")).map(c => c.value);
+  if (!chosen.length) { banner.innerHTML = '<div class="err">Select at least one target.</div>'; return; }
+
+  const params = new URLSearchParams({ question: q, targets: chosen.join(",") });
+  if (persona) params.set("persona", persona);
+  if (brand) params.set("brand_focus", brand);
+
+  const runBtn = document.getElementById("run");
+  const status = document.getElementById("status");
+  runBtn.disabled = true; status.textContent = "Running…";
+
+  const es = new EventSource("/api/ask/stream?" + params.toString());
+  const groundedByName = Object.fromEntries(targetsData.map(t => [t.name, t.grounded]));
+
+  es.onmessage = (e) => {
+    const ev = JSON.parse(e.data);
+    if (ev.event === "answer") {
+      const card = ensureCard(ev.llm_name, ev.grounded || groundedByName[ev.llm_name]);
+      card.querySelector(".answer").textContent = ev.answer_text || "(no answer — " + ev.status + ")";
+      if (ev.citations && ev.citations.length) {
+        card.querySelector(".citations").innerHTML = "<strong>Sources:</strong><ul>" +
+          ev.citations.map(c => `<li><a href="${c.url}" target="_blank" rel="noopener">${c.title || c.url}</a></li>`).join("") + "</ul>";
+      }
+    } else if (ev.event === "score") {
+      const card = ensureCard(ev.llm_name, groundedByName[ev.llm_name]);
+      const color = POSCOLOR[ev.competitive_position] || "#eee";
+      card.querySelector(".score").innerHTML =
+        `<span class="chip" style="background:${color}">${ev.competitive_position}</span>` +
+        `<span class="chip" style="background:#f0f0f0">sentiment ${ev.sentiment_score}</span>`;
+    } else if (ev.event === "error") {
+      banner.innerHTML = `<div class="err">${ev.message || "Error"}</div>`;
+    } else if (ev.event === "done") {
+      es.close(); runBtn.disabled = false; status.textContent = "Done.";
+    }
+  };
+  es.onerror = () => { es.close(); runBtn.disabled = false; status.textContent = "Connection closed."; };
+}
+
+document.getElementById("run").addEventListener("click", run);
+loadTargets();
+</script>
+</body>
+</html>
