@@ -109,15 +109,31 @@ def test_build_adapters_propagates_grounded_flag():
     cfg = AppConfig(
         settings=Settings(),
         brands=BrandConfig(),
-        targets=[LLMTargetConfig(
-            name="GPT-4o-Grounded", adapter="openai", model_version="gpt-4o",
-            api_key_env="OPENAI_API_KEY", grounded=True,
-            pricing={"input_per_1k": 0.0, "output_per_1k": 0.0},
-            rate_limit={"requests_per_minute": 1, "tokens_per_minute": 1},
-        )],
+        targets=[
+            LLMTargetConfig(
+                name="GPT-4o-Grounded", adapter="openai", model_version="gpt-4o",
+                api_key_env="OPENAI_API_KEY", grounded=True,
+                pricing=PricingConfig(input_per_1k=0.0, output_per_1k=0.0),
+                rate_limit=RateLimitConfig(requests_per_minute=1, tokens_per_minute=1),
+            ),
+            LLMTargetConfig(
+                name="Gemini-Grounded", adapter="gemini", model_version="gemini-2.5-pro",
+                api_key_env="GOOGLE_API_KEY", grounded=True,
+                pricing=PricingConfig(input_per_1k=0.0, output_per_1k=0.0),
+                rate_limit=RateLimitConfig(requests_per_minute=1, tokens_per_minute=1),
+            ),
+            LLMTargetConfig(
+                name="Claude-Grounded", adapter="claude", model_version="claude-opus-4-8",
+                api_key_env="ANTHROPIC_API_KEY", grounded=True,
+                pricing=PricingConfig(input_per_1k=0.0, output_per_1k=0.0),
+                rate_limit=RateLimitConfig(requests_per_minute=1, tokens_per_minute=1),
+            ),
+        ],
     )
+    seen, of, gf, af = _fake_factories()
     adapters = build_adapters(
-        cfg, {"OPENAI_API_KEY": "k"},
-        openai_client_factory=lambda key: object(),
+        cfg,
+        {"OPENAI_API_KEY": "k-o", "GOOGLE_API_KEY": "k-g", "ANTHROPIC_API_KEY": "k-c"},
+        openai_client_factory=of, gemini_model_factory=gf, anthropic_client_factory=af,
     )
-    assert adapters[0].grounded is True
+    assert all(a.grounded is True for a in adapters)
