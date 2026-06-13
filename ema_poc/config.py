@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+from collections.abc import Mapping
 from pathlib import Path
 
 import yaml
@@ -73,3 +75,23 @@ def load_config(config_dir: Path | str) -> AppConfig:
         )
     except ValidationError as exc:
         raise ConfigError(f"Invalid configuration: {exc}") from exc
+
+
+def validate_credentials(
+    config: AppConfig, env: Mapping[str, str] | None = None
+) -> None:
+    """Verify every required credential is present, else raise ConfigError (IN-502)."""
+    if env is None:
+        env = os.environ
+
+    missing: list[str] = []
+    if not env.get(config.settings.anthropic_api_key_env):
+        missing.append(config.settings.anthropic_api_key_env)
+    for target in config.targets:
+        if target.enabled and not env.get(target.api_key_env):
+            missing.append(target.api_key_env)
+
+    if missing:
+        raise ConfigError(
+            "Missing required credentials: " + ", ".join(sorted(set(missing)))
+        )
