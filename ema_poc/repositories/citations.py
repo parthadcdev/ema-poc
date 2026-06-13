@@ -31,6 +31,8 @@ def save_citations(
     commit: bool = True,
 ) -> None:
     """Insert one row per citation. No-op for an empty list."""
+    if not citations:
+        return
     for c in citations:
         conn.execute(
             """INSERT INTO response_citations
