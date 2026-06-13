@@ -42,6 +42,8 @@ After `pip install -e .`, the `ema` command is available:
 - `ema score` — score any unscored responses.
 - `ema healthcheck` — check connectivity to all configured LLM APIs.
 - `ema import-questions path/to/questions.csv` — import a question bank (CSV or .xlsx).
+- `ema dashboard --out dashboard.html` — generate the self-contained HTML dashboard
+  (sentiment, competitive positioning, alerts, response volume) for stakeholder review.
 
 All commands accept `--config-dir` (default `config`). Required API keys come
 from the environment (see `.env.example`).
