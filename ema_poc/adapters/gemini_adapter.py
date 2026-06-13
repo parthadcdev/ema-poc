@@ -83,7 +83,7 @@ class GeminiAdapter(LLMAdapter):
             )
 
         truncated = finish_name == "MAX_TOKENS"
-        citations = _extract_gemini_citations(candidates[0]) if candidates else []
+        citations = _extract_gemini_citations(candidates[0]) if (candidates and self.grounded) else []
         return LLMResponse(
             text=getattr(resp, "text", "") or "",
             finish_reason="length" if truncated else "stop",

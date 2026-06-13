@@ -39,7 +39,7 @@ class _FakeModel:
         self._resp = resp
         self.gen_config = None
 
-    def generate_content(self, text, generation_config=None):
+    def generate_content(self, text, generation_config=None, **_kwargs):
         self.text = text
         self.gen_config = generation_config
         return self._resp
