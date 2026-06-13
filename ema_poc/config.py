@@ -30,6 +30,7 @@ class LLMTargetConfig(BaseModel):
     model_version: str
     api_key_env: str
     enabled: bool = True
+    grounded: bool = False
     params: dict = Field(default_factory=dict)
     pricing: PricingConfig
     rate_limit: RateLimitConfig

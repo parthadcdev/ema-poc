@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from ema_poc.adapters.claude_adapter import ClaudeTargetAdapter
 
 
@@ -80,3 +82,48 @@ def test_refusal_stop_reason_is_blocked():
     assert r.status == "BLOCKED"
     assert r.finish_reason == "blocked"
     assert r.text == ""
+
+
+def _grounded_claude_resp():
+    cite = SimpleNamespace(url="https://src/c", title="Claude Source", cited_text="snippet text")
+    text_block = SimpleNamespace(type="text", text="Grounded claude answer.", citations=[cite])
+    return SimpleNamespace(
+        content=[text_block],
+        stop_reason="end_turn",
+        usage=SimpleNamespace(input_tokens=12, output_tokens=6),
+    )
+
+
+def test_claude_grounded_declares_web_search_tool_and_parses_citations():
+    captured = {}
+
+    class _Msgs:
+        def create(self, **kwargs):
+            captured.update(kwargs)
+            return _grounded_claude_resp()
+
+    class _Client:
+        messages = _Msgs()
+
+    adapter = ClaudeTargetAdapter(
+        name="Claude-Opus-4.8-Grounded", model_version="claude-opus-4-8",
+        params={"max_tokens": 4096}, client=_Client(), grounded=True,
+    )
+    out = adapter.query("sys", "q?")
+    tools = captured.get("tools") or []
+    assert len(tools) == 1
+    assert tools[0]["type"] == "web_search_20250305"
+    assert tools[0]["name"] == "web_search"
+    assert tools[0]["max_uses"] == 5
+    assert out.status == "SUCCESS"
+    assert out.text == "Grounded claude answer."
+    assert [(c.title, c.url, c.snippet) for c in out.citations] == [
+        ("Claude Source", "https://src/c", "snippet text")
+    ]
+
+
+def test_ungrounded_adapter_returns_empty_citations():
+    msg = _Message([_Block("text", "plain answer")], "end_turn")
+    out = _adapter(msg).query("You are a patient.", "Is drug X first-line?")
+    assert out.status == "SUCCESS"
+    assert out.citations == []

@@ -46,3 +46,5 @@ def test_ignores_disabled_targets():
     cfg = _config([_target("Gemini", "GOOGLE_API_KEY", enabled=False)])
     env = {"ANTHROPIC_API_KEY": "sk-a"}
     validate_credentials(cfg, env)  # disabled target's key not required
+
+

@@ -80,6 +80,17 @@ CREATE TABLE IF NOT EXISTS scores (
 );
 CREATE INDEX IF NOT EXISTS idx_scores_response ON scores(response_id);
 
+CREATE TABLE IF NOT EXISTS response_citations (
+    citation_id  TEXT PRIMARY KEY,
+    response_id  TEXT NOT NULL,
+    title        TEXT NOT NULL,
+    url          TEXT NOT NULL,
+    snippet      TEXT,
+    created_at   TEXT NOT NULL,
+    FOREIGN KEY (response_id) REFERENCES responses(response_id)
+);
+CREATE INDEX IF NOT EXISTS idx_citations_response ON response_citations(response_id);
+
 CREATE TABLE IF NOT EXISTS alerts (
     alert_id    TEXT PRIMARY KEY,
     score_id    TEXT NOT NULL,

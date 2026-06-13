@@ -54,6 +54,7 @@ def build_adapters(
                     model_version=target.model_version,
                     params=target.params,
                     client=openai_client_factory(api_key),
+                    grounded=target.grounded,
                 )
             )
         elif target.adapter == "gemini":
@@ -65,6 +66,7 @@ def build_adapters(
                     model_factory=lambda system_prompt, _k=api_key, _m=target.model_version: (
                         gemini_model_factory(_k, _m, system_prompt)
                     ),
+                    grounded=target.grounded,
                 )
             )
         elif target.adapter == "claude":
@@ -74,6 +76,7 @@ def build_adapters(
                     model_version=target.model_version,
                     params=target.params,
                     client=anthropic_client_factory(api_key),
+                    grounded=target.grounded,
                 )
             )
         else:

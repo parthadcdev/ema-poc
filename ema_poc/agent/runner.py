@@ -22,6 +22,7 @@ from ema_poc.agent.rate_limiter import RateLimiter
 from ema_poc.audit import record_event
 from ema_poc.config import AppConfig
 from ema_poc.prompts import resolve_system_prompt
+from ema_poc.repositories.citations import save_citations
 from ema_poc.repositories.questions import active_approved
 from ema_poc.repositories.responses import build_response, completed_keys, save_response
 from ema_poc.repositories.runs import create_run, finish_run, get_run
@@ -125,15 +126,24 @@ def run(
             for fut in as_completed(futures):
                 adapter = futures[fut]
                 llm_resp = fut.result()
+                now = now_factory()
                 response = build_response(
                     run_id=run_id,
                     question=question,
                     adapter=adapter,
                     llm_response=llm_resp,
-                    now=now_factory(),
+                    now=now,
                     response_id=id_factory(),
                 )
                 save_response(conn, response)
+                if llm_resp.citations:
+                    save_citations(
+                        conn,
+                        response_id=response.response_id,
+                        citations=llm_resp.citations,
+                        now=now,
+                        id_factory=id_factory,
+                    )
                 record_event(
                     conn,
                     event_type="LLM_RESPONSE",
