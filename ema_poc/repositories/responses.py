@@ -99,3 +99,107 @@ def completed_keys(conn: sqlite3.Connection, run_id: str) -> set[tuple[str, str]
         (run_id,),
     ).fetchall()
     return {(r["question_id"], r["llm_name"]) for r in rows}
+
+
+def _enum_value(x):
+    return x.value if hasattr(x, "value") else x
+
+
+def _response_filters(
+    *,
+    llm=None,
+    persona=None,
+    therapeutic_area: str | None = None,
+    brand_focus: str | None = None,
+    domain=None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    sentiment_min: float | None = None,
+    sentiment_max: float | None = None,
+    alert_triggered: bool | None = None,
+    status=None,
+) -> tuple[str, list]:
+    """Build a parameterized WHERE clause (FR-303). Returns (clause, params)
+    where clause is '' or ' WHERE ...'."""
+    where: list[str] = []
+    params: list = []
+    if llm is not None:
+        where.append("llm_name = ?")
+        params.append(llm)
+    if persona is not None:
+        where.append("persona = ?")
+        params.append(_enum_value(persona))
+    if therapeutic_area is not None:
+        where.append("therapeutic_area = ?")
+        params.append(therapeutic_area)
+    if brand_focus is not None:
+        where.append("brand_focus = ?")
+        params.append(brand_focus)
+    if domain is not None:
+        where.append("domain = ?")
+        params.append(_enum_value(domain))
+    if date_from is not None:
+        where.append("timestamp_utc >= ?")
+        params.append(date_from)
+    if date_to is not None:
+        where.append("timestamp_utc <= ?")
+        params.append(date_to)
+    if sentiment_min is not None:
+        where.append("sentiment_score >= ?")
+        params.append(sentiment_min)
+    if sentiment_max is not None:
+        where.append("sentiment_score <= ?")
+        params.append(sentiment_max)
+    if alert_triggered is not None:
+        where.append("alert_triggered = ?")
+        params.append(int(alert_triggered))
+    if status is not None:
+        where.append("status = ?")
+        params.append(_enum_value(status))
+    clause = (" WHERE " + " AND ".join(where)) if where else ""
+    return clause, params
+
+
+def query_responses(
+    conn: sqlite3.Connection,
+    *,
+    llm=None,
+    persona=None,
+    therapeutic_area: str | None = None,
+    brand_focus: str | None = None,
+    domain=None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    sentiment_min: float | None = None,
+    sentiment_max: float | None = None,
+    alert_triggered: bool | None = None,
+    status=None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[Response]:
+    """Query responses by any combination of filters, ordered by timestamp then
+    id for stable pagination (FR-303, FR-307)."""
+    clause, params = _response_filters(
+        llm=llm, persona=persona, therapeutic_area=therapeutic_area,
+        brand_focus=brand_focus, domain=domain, date_from=date_from,
+        date_to=date_to, sentiment_min=sentiment_min, sentiment_max=sentiment_max,
+        alert_triggered=alert_triggered, status=status,
+    )
+    sql = (
+        f"SELECT * FROM responses{clause} "
+        "ORDER BY timestamp_utc ASC, response_id ASC"
+    )
+    if limit is not None:
+        sql += " LIMIT ? OFFSET ?"
+        params = params + [limit, offset]
+    rows = conn.execute(sql, params).fetchall()
+    return [Response(**dict(r)) for r in rows]
+
+
+def count_responses(conn: sqlite3.Connection, **filters) -> int:
+    """Count responses matching the same filters as query_responses (FR-307)."""
+    clause, params = _response_filters(**filters)
+    row = conn.execute(
+        f"SELECT COUNT(*) AS c FROM responses{clause}", params
+    ).fetchone()
+    return row["c"]
