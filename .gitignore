@@ -18,3 +18,5 @@ htmlcov/
 *.db
 *.log
 dashboard_*.html
+dashboard.html
+seed_questions.csv

@@ -62,7 +62,7 @@ def score_response(
     `messages.parse`)."""
     parsed = client.messages.parse(
         model=model,
-        max_tokens=1024,
+        max_tokens=4096,  # adaptive thinking + structured JSON output needs headroom
         thinking={"type": "adaptive"},
         system=_SYSTEM,
         messages=[
