@@ -45,6 +45,7 @@ class Settings(BaseModel):
     scoring_model: str = "claude-opus-4-8"
     anthropic_api_key_env: str = "ANTHROPIC_API_KEY"
     system_prompts: dict[str, str] = Field(default_factory=dict)
+    notify_webhook: str | None = None
 
 
 class BrandConfig(BaseModel):
