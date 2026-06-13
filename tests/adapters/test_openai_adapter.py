@@ -141,7 +141,7 @@ def test_openai_grounded_enables_web_search_and_parses_citations():
     )
     out = adapter.query("sys", "question?")
     tools = fake.responses.called_with["tools"]
-    assert any(t.get("type", "").startswith("web_search") for t in tools)
+    assert {"type": "web_search_preview"} in tools
     assert out.status == "SUCCESS"
     assert out.text == "Grounded answer."
     assert [(c.title, c.url) for c in out.citations] == [("Source A", "https://src/a")]

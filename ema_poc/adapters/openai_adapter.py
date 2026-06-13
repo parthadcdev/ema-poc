@@ -64,7 +64,8 @@ class OpenAIAdapter(LLMAdapter):
             status="SUCCESS" if text else "FAILED",
             prompt_tokens=getattr(usage, "input_tokens", None) if usage else None,
             completion_tokens=getattr(usage, "output_tokens", None) if usage else None,
-            raw={"model": self.model_version, "grounded": True},
+            raw={"model": self.model_version, "grounded": True,
+                 "status": getattr(resp, "status", None)},
             citations=citations,
         )
 
