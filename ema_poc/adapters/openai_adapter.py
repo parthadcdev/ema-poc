@@ -25,11 +25,16 @@ class OpenAIAdapter(LLMAdapter):
         choice = resp.choices[0]
         finish = choice.finish_reason
         text = choice.message.content or ""
-        truncated = finish == "length"
+        if finish == "content_filter":
+            norm_finish, status = "blocked", "BLOCKED"
+        elif finish == "length":
+            norm_finish, status = "length", "TRUNCATED"
+        else:
+            norm_finish, status = "stop", "SUCCESS"
         return LLMResponse(
             text=text,
-            finish_reason="length" if truncated else "stop",
-            status="TRUNCATED" if truncated else "SUCCESS",
+            finish_reason=norm_finish,
+            status=status,
             prompt_tokens=getattr(resp.usage, "prompt_tokens", None),
             completion_tokens=getattr(resp.usage, "completion_tokens", None),
             raw={"finish_reason": finish, "model": self.model_version},

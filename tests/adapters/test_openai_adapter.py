@@ -86,3 +86,10 @@ def test_none_content_becomes_empty_string():
     adapter = _adapter(_Completion(None, "stop"))
     r = adapter.query("s", "q")
     assert r.text == ""
+
+
+def test_content_filter_is_blocked():
+    adapter = _adapter(_Completion("", "content_filter"))
+    r = adapter.query("s", "q")
+    assert r.status == "BLOCKED"
+    assert r.finish_reason == "blocked"

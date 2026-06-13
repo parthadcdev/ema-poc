@@ -65,6 +65,8 @@ def test_request_uses_adaptive_thinking_and_no_temperature():
     assert fake.kwargs["system"] == "SYS"
     assert fake.kwargs["messages"] == [{"role": "user", "content": "Q"}]
     assert "temperature" not in fake.kwargs  # Opus 4.8 rejects temperature
+    assert "top_p" not in fake.kwargs
+    assert "budget_tokens" not in fake.kwargs
 
 
 def test_max_tokens_stop_reason_is_truncated():
