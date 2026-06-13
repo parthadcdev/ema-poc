@@ -41,3 +41,32 @@ def test_redaction_filter_scrubs_message():
     )
     RedactionFilter().filter(record)
     assert "sk-SECRET1234567890" not in record.msg
+
+
+def test_redaction_filter_scrubs_args():
+    record = logging.LogRecord(
+        name="ema",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="using key %s now",
+        args=("sk-SECRET1234567890",),
+        exc_info=None,
+    )
+    RedactionFilter().filter(record)
+    assert "sk-SECRET1234567890" not in record.getMessage()
+
+
+def test_get_logger_redacts_through_full_pipeline():
+    import io
+
+    from ema_poc.logging_setup import get_logger
+
+    log = get_logger("ema_test_pipeline")
+    buf = io.StringIO()
+    log.handlers[0].stream = buf
+    log.info("key sk-ABCDEF1234567890", extra={"context": {"llm_name": "GPT-4o"}})
+    out = buf.getvalue()
+    assert "sk-ABCDEF1234567890" not in out
+    parsed = json.loads(out)
+    assert parsed["llm_name"] == "GPT-4o"

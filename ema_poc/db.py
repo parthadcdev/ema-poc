@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import sqlite3
 
+# created_at/updated_at are NOT NULL: the repository layer always supplies
+# ISO-8601 UTC timestamps at insert time (the models keep them optional for
+# pre-persistence construction / test injection).
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS questions (
     question_id      TEXT NOT NULL,

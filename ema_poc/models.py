@@ -43,6 +43,10 @@ class CompetitivePosition(str, Enum):
     NOT_MENTIONED = "NOT_MENTIONED"
 
 
+# NOTE: created_at/updated_at are nullable on the in-memory model but NOT NULL
+# in the DB schema. The repository layer (Phase 2+) supplies ISO-8601 UTC
+# timestamps at insert time. Keeping them optional here allows constructing an
+# entity before persistence and injecting timestamps in tests.
 class Question(BaseModel):
     question_id: str
     version: int = 1

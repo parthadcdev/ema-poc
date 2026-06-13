@@ -79,3 +79,10 @@ def test_load_config_raises_config_error_on_missing_file(tmp_path: Path):
     # llm_targets.yaml intentionally absent
     with pytest.raises(ConfigError):
         load_config(tmp_path)
+
+
+def test_load_config_raises_config_error_on_malformed_yaml(tmp_path: Path):
+    (tmp_path / "settings.yaml").write_text("foo: [bar\n")  # unterminated flow seq
+    (tmp_path / "llm_targets.yaml").write_text("targets: []\n")
+    with pytest.raises(ConfigError):
+        load_config(tmp_path)

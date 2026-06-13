@@ -25,6 +25,7 @@ def test_record_event_persists_row(tmp_path):
     assert events[0]["event_type"] == "LLM_CALL"
     assert events[0]["role"] == "TARGET"
     assert events[0]["http_status"] == 200
+    conn.close()
 
 
 def test_events_accumulate_append_only(tmp_path):
@@ -33,6 +34,7 @@ def test_events_accumulate_append_only(tmp_path):
     record_event(conn, event_type="B", timestamp="2026-06-13T02:00:01+00:00")
     events = list_events(conn)
     assert [e["event_type"] for e in events] == ["A", "B"]
+    conn.close()
 
 
 def test_module_exposes_no_mutation_helpers():
@@ -41,3 +43,11 @@ def test_module_exposes_no_mutation_helpers():
     # Audit log is insert-only by design (SE-003): no update/delete helpers.
     assert not hasattr(audit, "update_event")
     assert not hasattr(audit, "delete_event")
+
+
+def test_record_event_defaults_timestamp(tmp_path):
+    conn = _conn(tmp_path)
+    record_event(conn, event_type="X")
+    events = list_events(conn)
+    assert events[0]["timestamp"]  # non-empty ISO-8601 timestamp auto-filled
+    conn.close()

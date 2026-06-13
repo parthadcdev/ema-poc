@@ -23,6 +23,11 @@ def redact(text: str) -> str:
 
 class RedactionFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
+        # Collapse lazy %-args into the message so redaction sees the final
+        # interpolated string (secrets are often passed as a log argument).
+        if record.args:
+            record.msg = record.getMessage()
+            record.args = ()
         if isinstance(record.msg, str):
             record.msg = redact(record.msg)
         return True

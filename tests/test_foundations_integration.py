@@ -50,3 +50,4 @@ def test_config_db_and_audit_wire_together(tmp_path):
     events = list_events(conn)
     assert events[0]["event_type"] == "STARTUP"
     assert "1 target" in events[0]["detail"]
+    conn.close()

@@ -19,12 +19,14 @@ def test_init_schema_creates_all_tables(tmp_path):
     ).fetchall()
     names = {r["name"] for r in rows}
     assert EXPECTED_TABLES <= names
+    conn.close()
 
 
 def test_init_schema_is_idempotent(tmp_path):
     conn = connect(str(tmp_path / "t.sqlite"))
     init_schema(conn)
     init_schema(conn)  # second call must not raise
+    conn.close()
 
 
 def test_row_factory_returns_mappings(tmp_path):
@@ -38,3 +40,4 @@ def test_row_factory_returns_mappings(tmp_path):
     row = conn.execute("SELECT run_id, status FROM runs").fetchone()
     assert row["run_id"] == "run-1"
     assert row["status"] == "RUNNING"
+    conn.close()
