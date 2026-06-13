@@ -49,6 +49,10 @@ def run(
     adapters: list[LLMAdapter],
     config: AppConfig,
     *,
+    persona=None,
+    therapeutic_area: str | None = None,
+    brand_focus: str | None = None,
+    domain=None,
     run_id: str | None = None,
     id_factory=lambda: uuid4().hex,
     now_factory=_now_iso,
@@ -70,6 +74,19 @@ def run(
     pricing = {t.name: t.pricing for t in config.targets}
 
     questions = active_approved(conn)
+
+    def _ev(x):
+        return x.value if hasattr(x, "value") else x
+
+    if persona is not None:
+        questions = [q for q in questions if q.persona.value == _ev(persona)]
+    if therapeutic_area is not None:
+        questions = [q for q in questions if q.therapeutic_area == therapeutic_area]
+    if brand_focus is not None:
+        questions = [q for q in questions if q.brand_focus == brand_focus]
+    if domain is not None:
+        questions = [q for q in questions if q.domain.value == _ev(domain)]
+
     done = completed_keys(conn, run_id)
 
     by_status = {s: 0 for s in _STATUSES}
