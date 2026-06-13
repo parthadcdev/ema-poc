@@ -7,6 +7,7 @@ injectable `now` ISO-8601 UTC timestamp for deterministic tests.
 
 from __future__ import annotations
 
+import csv
 import sqlite3
 from datetime import datetime, timezone
 
@@ -241,3 +242,63 @@ def active_approved(conn: sqlite3.Connection) -> list[Question]:
     """Current questions that are active AND approved AND not soft-deleted —
     the set the runner dispatches (SE-002, BR-009)."""
     return list_questions(conn, active=True, approval_status="APPROVED")
+
+
+def _coerce_optional(value) -> str | None:
+    if value is None:
+        return None
+    value = str(value).strip()
+    return value or None
+
+
+def _upsert_row(conn: sqlite3.Connection, row: dict, now: str) -> None:
+    qid = str(row["question_id"]).strip()
+    fields = dict(
+        question_text=str(row["question_text"]).strip(),
+        persona=str(row["persona"]).strip(),
+        domain=str(row["domain"]).strip(),
+        therapeutic_area=_coerce_optional(row.get("therapeutic_area")),
+        brand_focus=_coerce_optional(row.get("brand_focus")),
+    )
+    if get_current(conn, qid) is None:
+        add_question(conn, question_id=qid, now=now, **fields)
+    else:
+        update_question(conn, qid, now=now, **fields)
+
+
+def import_questions_csv(
+    conn: sqlite3.Connection, path: str, *, now: str | None = None
+) -> int:
+    """Upsert questions from a CSV with columns: question_id, question_text,
+    persona, domain, therapeutic_area, brand_focus. Existing question_ids are
+    updated as a new version; new ones are added (FR-105). Returns row count."""
+    now = now or _now_iso()
+    with open(path, newline="", encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+    for row in rows:
+        _upsert_row(conn, row, now)
+    return len(rows)
+
+
+def import_questions_excel(
+    conn: sqlite3.Connection, path: str, *, now: str | None = None
+) -> int:
+    """Upsert questions from an .xlsx whose first row is the header (same
+    columns as CSV import). Returns the number of data rows processed."""
+    from openpyxl import load_workbook
+
+    now = now or _now_iso()
+    wb = load_workbook(path, read_only=True)
+    try:
+        ws = wb.active
+        rows_iter = ws.iter_rows(values_only=True)
+        headers = list(next(rows_iter))
+        count = 0
+        for values in rows_iter:
+            if all(v is None for v in values):
+                continue
+            _upsert_row(conn, dict(zip(headers, values)), now)
+            count += 1
+        return count
+    finally:
+        wb.close()
