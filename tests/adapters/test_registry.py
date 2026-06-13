@@ -103,3 +103,21 @@ def test_unknown_adapter_raises():
             cfg, env,
             openai_client_factory=of, gemini_model_factory=gf, anthropic_client_factory=af,
         )
+
+
+def test_build_adapters_propagates_grounded_flag():
+    cfg = AppConfig(
+        settings=Settings(),
+        brands=BrandConfig(),
+        targets=[LLMTargetConfig(
+            name="GPT-4o-Grounded", adapter="openai", model_version="gpt-4o",
+            api_key_env="OPENAI_API_KEY", grounded=True,
+            pricing={"input_per_1k": 0.0, "output_per_1k": 0.0},
+            rate_limit={"requests_per_minute": 1, "tokens_per_minute": 1},
+        )],
+    )
+    adapters = build_adapters(
+        cfg, {"OPENAI_API_KEY": "k"},
+        openai_client_factory=lambda key: object(),
+    )
+    assert adapters[0].grounded is True

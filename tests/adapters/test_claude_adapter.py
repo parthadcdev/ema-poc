@@ -111,9 +111,19 @@ def test_claude_grounded_declares_web_search_tool_and_parses_citations():
     )
     out = adapter.query("sys", "q?")
     tools = captured.get("tools") or []
-    assert any(t.get("type", "").startswith("web_search") for t in tools)
+    assert len(tools) == 1
+    assert tools[0]["type"] == "web_search_20250305"
+    assert tools[0]["name"] == "web_search"
+    assert tools[0]["max_uses"] == 5
     assert out.status == "SUCCESS"
     assert out.text == "Grounded claude answer."
     assert [(c.title, c.url, c.snippet) for c in out.citations] == [
         ("Claude Source", "https://src/c", "snippet text")
     ]
+
+
+def test_ungrounded_adapter_returns_empty_citations():
+    msg = _Message([_Block("text", "plain answer")], "end_turn")
+    out = _adapter(msg).query("You are a patient.", "Is drug X first-line?")
+    assert out.status == "SUCCESS"
+    assert out.citations == []

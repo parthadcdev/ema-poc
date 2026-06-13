@@ -139,6 +139,37 @@ def test_resume_skips_completed_and_retries_failed(tmp_path):
     conn.close()
 
 
+def test_run_persists_citations_from_grounded_response(tmp_path):
+    from ema_poc.adapters.base import Citation
+    from ema_poc.repositories.citations import list_citations
+
+    conn = _conn(tmp_path)
+    add_question(conn, question_id="Q1", question_text="a", persona="Provider",
+                 domain="Safety", now=NOW)
+    approve_question(conn, "Q1", approver_name="R", now=NOW)
+
+    cite_resp = LLMResponse(
+        text="ans", finish_reason="stop", status="SUCCESS", completion_tokens=3,
+        citations=[Citation(title="X", url="https://src/x")],
+    )
+    adapter = _Adapter("GPT-4o", cite_resp)
+    cfg = _config(["GPT-4o"])
+    ids = _ids()
+    run(conn, [adapter], cfg, run_id="run-1", id_factory=ids,
+        now_factory=lambda: NOW, rate_limiters={}, sleep=lambda d: None)
+
+    row = conn.execute(
+        "SELECT response_id FROM responses WHERE llm_name=? AND question_id=?",
+        ("GPT-4o", "Q1"),
+    ).fetchone()
+    assert row is not None, "response row not saved"
+    rid = row[0]
+
+    cites = list_citations(conn, rid)
+    assert [c.url for c in cites] == ["https://src/x"]
+    conn.close()
+
+
 def test_run_marks_run_failed_when_a_db_write_raises(tmp_path, monkeypatch):
     import sqlite3
 
