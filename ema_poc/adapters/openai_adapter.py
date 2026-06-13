@@ -1,18 +1,25 @@
-"""OpenAI (GPT-4o) adapter — Chat Completions (IN-1)."""
+"""OpenAI (GPT-4o) adapter. Ungrounded: Chat Completions (IN-1). Grounded:
+Responses API with the web_search tool, returning url_citation annotations."""
 
 from __future__ import annotations
 
-from ema_poc.adapters.base import LLMAdapter, LLMResponse
+from ema_poc.adapters.base import Citation, LLMAdapter, LLMResponse
 
 
 class OpenAIAdapter(LLMAdapter):
-    def __init__(self, *, name: str, model_version: str, params: dict, client):
+    def __init__(self, *, name: str, model_version: str, params: dict, client, grounded: bool = False):
         self.name = name
         self.model_version = model_version
         self.params = params
         self._client = client
+        self.grounded = grounded
 
     def query(self, system_prompt: str, question_text: str) -> LLMResponse:
+        if self.grounded:
+            return self._query_grounded(system_prompt, question_text)
+        return self._query_chat(system_prompt, question_text)
+
+    def _query_chat(self, system_prompt: str, question_text: str) -> LLMResponse:
         resp = self._client.chat.completions.create(
             model=self.model_version,
             messages=[
@@ -39,3 +46,38 @@ class OpenAIAdapter(LLMAdapter):
             completion_tokens=getattr(resp.usage, "completion_tokens", None),
             raw={"finish_reason": finish, "model": self.model_version},
         )
+
+    def _query_grounded(self, system_prompt: str, question_text: str) -> LLMResponse:
+        resp = self._client.responses.create(
+            model=self.model_version,
+            tools=[{"type": "web_search_preview"}],
+            instructions=system_prompt,
+            input=question_text,
+            max_output_tokens=self.params.get("max_tokens", 4096),
+        )
+        text = getattr(resp, "output_text", "") or ""
+        citations = _extract_openai_citations(resp)
+        usage = getattr(resp, "usage", None)
+        return LLMResponse(
+            text=text,
+            finish_reason="stop" if text else "error",
+            status="SUCCESS" if text else "FAILED",
+            prompt_tokens=getattr(usage, "input_tokens", None) if usage else None,
+            completion_tokens=getattr(usage, "output_tokens", None) if usage else None,
+            raw={"model": self.model_version, "grounded": True},
+            citations=citations,
+        )
+
+
+def _extract_openai_citations(resp) -> list[Citation]:
+    out: list[Citation] = []
+    seen: set[str] = set()
+    for block in getattr(resp, "output", None) or []:
+        for content in getattr(block, "content", None) or []:
+            for ann in getattr(content, "annotations", None) or []:
+                if getattr(ann, "type", None) == "url_citation":
+                    url = getattr(ann, "url", None)
+                    if url and url not in seen:
+                        seen.add(url)
+                        out.append(Citation(title=getattr(ann, "title", "") or url, url=url))
+    return out
