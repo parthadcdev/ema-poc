@@ -103,3 +103,55 @@ def add_question(
     )
     _insert_version(conn, q)
     return get_version(conn, question_id, 1)
+
+
+def _enum_value(x):
+    return x.value if hasattr(x, "value") else x
+
+
+def list_questions(
+    conn: sqlite3.Connection,
+    *,
+    persona=None,
+    therapeutic_area: str | None = None,
+    brand_focus: str | None = None,
+    domain=None,
+    active: bool | None = None,
+    approval_status=None,
+    include_deleted: bool = False,
+) -> list[Question]:
+    """Return the current version of each question, filtered. Excludes
+    soft-deleted questions unless include_deleted=True."""
+    sql = [
+        "SELECT q.* FROM questions q",
+        "JOIN (SELECT question_id, MAX(version) AS v FROM questions"
+        " GROUP BY question_id) m",
+        "ON q.question_id = m.question_id AND q.version = m.v",
+    ]
+    where: list[str] = []
+    params: list = []
+    if persona is not None:
+        where.append("q.persona = ?")
+        params.append(_enum_value(persona))
+    if therapeutic_area is not None:
+        where.append("q.therapeutic_area = ?")
+        params.append(therapeutic_area)
+    if brand_focus is not None:
+        where.append("q.brand_focus = ?")
+        params.append(brand_focus)
+    if domain is not None:
+        where.append("q.domain = ?")
+        params.append(_enum_value(domain))
+    if active is not None:
+        where.append("q.active = ?")
+        params.append(int(active))
+    if approval_status is not None:
+        where.append("q.approval_status = ?")
+        params.append(_enum_value(approval_status))
+    if not include_deleted:
+        where.append("q.deleted_at IS NULL")
+    if where:
+        sql.append("WHERE " + " AND ".join(where))
+    sql.append("ORDER BY q.question_id")
+    rows = conn.execute("\n".join(sql), params).fetchall()
+    return [_question_from_row(r) for r in rows]
