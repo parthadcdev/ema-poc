@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from ema_poc.config import load_config, ConfigError
+from ema_poc.config import load_config, ConfigError, LLMTargetConfig
 
 
 @pytest.fixture
@@ -86,3 +86,18 @@ def test_load_config_raises_config_error_on_malformed_yaml(tmp_path: Path):
     (tmp_path / "llm_targets.yaml").write_text("targets: []\n")
     with pytest.raises(ConfigError):
         load_config(tmp_path)
+
+
+def test_target_grounded_defaults_false_and_parses_true():
+    t = LLMTargetConfig(
+        name="X", adapter="openai", model_version="m", api_key_env="K",
+        pricing={"input_per_1k": 0.0, "output_per_1k": 0.0},
+        rate_limit={"requests_per_minute": 1, "tokens_per_minute": 1},
+    )
+    assert t.grounded is False
+    t2 = LLMTargetConfig(
+        name="Xg", adapter="openai", model_version="m", api_key_env="K", grounded=True,
+        pricing={"input_per_1k": 0.0, "output_per_1k": 0.0},
+        rate_limit={"requests_per_minute": 1, "tokens_per_minute": 1},
+    )
+    assert t2.grounded is True
