@@ -211,3 +211,33 @@ def reject_question(
         approver_name=approver_name,
         now=now,
     )
+
+
+def soft_delete_question(
+    conn: sqlite3.Connection, question_id: str, reason: str, *, now: str | None = None
+) -> Question:
+    """Tombstone the question via a new version with deleted_at set and
+    active=False. History is preserved (no physical delete; DM-003)."""
+    now = now or _now_iso()
+    return update_question(
+        conn,
+        question_id,
+        now=now,
+        deleted_at=now,
+        delete_reason=reason,
+        active=False,
+    )
+
+
+def history(conn: sqlite3.Connection, question_id: str) -> list[Question]:
+    rows = conn.execute(
+        "SELECT * FROM questions WHERE question_id = ? ORDER BY version ASC",
+        (question_id,),
+    ).fetchall()
+    return [_question_from_row(r) for r in rows]
+
+
+def active_approved(conn: sqlite3.Connection) -> list[Question]:
+    """Current questions that are active AND approved AND not soft-deleted —
+    the set the runner dispatches (SE-002, BR-009)."""
+    return list_questions(conn, active=True, approval_status="APPROVED")
