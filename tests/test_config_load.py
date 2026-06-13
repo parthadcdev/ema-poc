@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from ema_poc.config import load_config
+from ema_poc.config import load_config, ConfigError
 
 
 @pytest.fixture
@@ -62,3 +62,20 @@ def test_load_config_parses_settings_targets_and_brands(config_dir: Path):
 
     gemini = cfg.targets[1]
     assert gemini.enabled is False
+
+
+def test_load_config_uses_defaults_when_optional_keys_absent(tmp_path: Path):
+    (tmp_path / "settings.yaml").write_text("settings:\n  db_path: x.sqlite\n")
+    (tmp_path / "llm_targets.yaml").write_text("targets: []\n")
+    cfg = load_config(tmp_path)
+    assert cfg.settings.max_retries == 3
+    assert cfg.settings.backoff_seconds == [2, 4, 8]
+    assert cfg.brands.abbvie_brands == []
+    assert cfg.targets == []
+
+
+def test_load_config_raises_config_error_on_missing_file(tmp_path: Path):
+    (tmp_path / "settings.yaml").write_text("settings: {}\n")
+    # llm_targets.yaml intentionally absent
+    with pytest.raises(ConfigError):
+        load_config(tmp_path)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 
 class ConfigError(Exception):
@@ -57,11 +57,19 @@ class AppConfig(BaseModel):
 
 def load_config(config_dir: Path | str) -> AppConfig:
     config_dir = Path(config_dir)
-    settings_raw = yaml.safe_load((config_dir / "settings.yaml").read_text()) or {}
-    targets_raw = yaml.safe_load((config_dir / "llm_targets.yaml").read_text()) or {}
+    try:
+        settings_raw = yaml.safe_load((config_dir / "settings.yaml").read_text()) or {}
+        targets_raw = yaml.safe_load((config_dir / "llm_targets.yaml").read_text()) or {}
+    except FileNotFoundError as exc:
+        raise ConfigError(f"Missing config file: {exc.filename}") from exc
+    except yaml.YAMLError as exc:
+        raise ConfigError(f"Malformed YAML: {exc}") from exc
 
-    return AppConfig(
-        settings=Settings(**settings_raw.get("settings", {})),
-        brands=BrandConfig(**settings_raw.get("brands", {})),
-        targets=[LLMTargetConfig(**t) for t in targets_raw.get("targets", [])],
-    )
+    try:
+        return AppConfig(
+            settings=Settings(**settings_raw.get("settings", {})),
+            brands=BrandConfig(**settings_raw.get("brands", {})),
+            targets=[LLMTargetConfig(**t) for t in targets_raw.get("targets", [])],
+        )
+    except ValidationError as exc:
+        raise ConfigError(f"Invalid configuration: {exc}") from exc
