@@ -4,7 +4,9 @@ For each active+approved question, fan out to all configured adapters
 concurrently (network I/O in a thread pool), then persist every result
 serially in this (main) thread — sqlite3 connections are not shared across
 threads. Each (question_id, llm_name) already captured (status != FAILED) is
-skipped so a run resumes without re-submitting completed work."""
+skipped so a run resumes without re-submitting completed work. Responses are
+append-only: a retried FAILED pair gets a NEW response row (the prior FAILED
+row is preserved for audit) — never deleted or overwritten."""
 
 from __future__ import annotations
 
@@ -105,31 +107,13 @@ def run(
             for fut in as_completed(futures):
                 adapter = futures[fut]
                 llm_resp = fut.result()
-                # Reuse any existing FAILED row's response_id for this
-                # (run, question, adapter) so a resume-retry is an UPDATE
-                # rather than a conflicting INSERT. If no prior row exists
-                # (first attempt), generate a fresh id.
-                existing = conn.execute(
-                    "SELECT response_id FROM responses WHERE run_id = ?"
-                    " AND question_id = ? AND llm_name = ? AND status = 'FAILED'",
-                    (run_id, question.question_id, adapter.name),
-                ).fetchone()
-                if existing:
-                    reuse_id = existing["response_id"]
-                    conn.execute(
-                        "DELETE FROM responses WHERE response_id = ?",
-                        (reuse_id,),
-                    )
-                    response_id = reuse_id
-                else:
-                    response_id = id_factory()
                 response = build_response(
                     run_id=run_id,
                     question=question,
                     adapter=adapter,
                     llm_response=llm_resp,
                     now=now_factory(),
-                    response_id=response_id,
+                    response_id=id_factory(),
                 )
                 save_response(conn, response)
                 record_event(

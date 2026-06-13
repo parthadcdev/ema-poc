@@ -115,17 +115,22 @@ def test_run_records_failed_responses(tmp_path):
 def test_resume_skips_completed_and_retries_failed(tmp_path):
     conn = _conn(tmp_path)
     _seed_two_approved(conn)
+    ids = _ids()  # shared across both runs so response_ids stay unique (PK)
+    # First run: GPT-4o succeeds, Gemini fails
     run(conn,
         [_Adapter("GPT-4o", LLMResponse("x", "stop", "SUCCESS", prompt_tokens=1, completion_tokens=1)),
          _Adapter("Gemini", RuntimeError("down"))],
-        _config(["GPT-4o", "Gemini"]), run_id="run-1", id_factory=_ids(),
+        _config(["GPT-4o", "Gemini"]), run_id="run-1", id_factory=ids,
         now_factory=lambda: NOW, rate_limiters={}, sleep=lambda d: None)
+    # Resume: GPT-4o already done both Qs -> skipped; Gemini now healthy -> retried
     gpt = _Adapter("GPT-4o", LLMResponse("x2", "stop", "SUCCESS", prompt_tokens=1, completion_tokens=1))
     gem = _Adapter("Gemini", LLMResponse("y2", "stop", "SUCCESS", prompt_tokens=2, completion_tokens=2))
-    run(conn, [gpt, gem], _config(["GPT-4o", "Gemini"]), run_id="run-1", id_factory=_ids(),
+    run(conn, [gpt, gem], _config(["GPT-4o", "Gemini"]), run_id="run-1", id_factory=ids,
         now_factory=lambda: NOW, rate_limiters={}, sleep=lambda d: None)
     assert gpt.calls == 0   # already completed both questions -> skipped
     assert gem.calls == 2   # retried for both questions
+    # The prior FAILED Gemini rows are preserved (append-only); the new SUCCESS
+    # rows make those keys complete.
     assert completed_keys(conn, "run-1") == {
         ("Q1", "GPT-4o"), ("Q1", "Gemini"), ("Q2", "GPT-4o"), ("Q2", "Gemini"),
     }
