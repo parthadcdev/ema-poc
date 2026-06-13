@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from ema_poc.adapters.base import LLMResponse
-from ema_poc.models import Question, Response
+from ema_poc.models import CompetitivePosition, Question, Response
 
 
 def _iso(value: datetime | str | None) -> str | None:
@@ -264,3 +264,28 @@ def detect_change(
     return ResponseChange(
         question_id, llm_name, changed, previous_text, current_text, diff
     )
+
+
+def update_response_scoring(
+    conn: sqlite3.Connection,
+    response_id: str,
+    *,
+    sentiment_score: float | None,
+    competitive_position: CompetitivePosition | str,
+    alert_triggered: bool,
+) -> None:
+    """Update ONLY the derived/denormalized scoring columns on a response
+    (FR-302). The authoritative versioned scoring record lives in the scores
+    table (FR-304); these columns are a cache of the latest score so the Phase 4
+    sentiment/alert filters work. Captured content is never modified."""
+    cp = (
+        competitive_position.value
+        if hasattr(competitive_position, "value")
+        else competitive_position
+    )
+    conn.execute(
+        "UPDATE responses SET sentiment_score = ?, competitive_position = ?, "
+        "alert_triggered = ? WHERE response_id = ?",
+        (sentiment_score, cp, int(alert_triggered), response_id),
+    )
+    conn.commit()
