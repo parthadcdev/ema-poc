@@ -32,6 +32,32 @@ Required environment variables (see `.env.example`): `ANTHROPIC_API_KEY`,
 . .venv/bin/activate && pytest
 ```
 
+## CLI
+
+After `pip install -e .`, the `ema` command is available:
+
+- `ema run` — run the full approved question bank against all enabled targets.
+- `ema run --persona Provider --domain Safety --score` — subset run, then score.
+- `ema dry-run` — validate config + target connectivity without writing.
+- `ema score` — score any unscored responses.
+- `ema healthcheck` — check connectivity to all configured LLM APIs.
+- `ema import-questions path/to/questions.csv` — import a question bank (CSV or .xlsx).
+
+All commands accept `--config-dir` (default `config`). Required API keys come
+from the environment (see `.env.example`).
+
+## Scheduling (daily run)
+
+The POC runs unattended via OS cron. Example crontab entry for a daily run at
+02:00 UTC that also scores results:
+
+```
+0 2 * * *  cd /path/to/ema-poc && . .venv/bin/activate && ema run --score >> logs/cron.log 2>&1
+```
+
+Runs are resumable: re-invoking `ema run` continues an interrupted run without
+re-submitting already-captured responses.
+
 ## Status
 
 Foundations phase complete (config, storage, models, logging, audit).

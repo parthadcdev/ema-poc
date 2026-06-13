@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "ema-poc"
 version = "0.1.0"
@@ -14,6 +18,12 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-cov"]
+
+[project.scripts]
+ema = "ema_poc.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["ema_poc*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
