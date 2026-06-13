@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from ema_poc.adapters.gemini_adapter import GeminiAdapter
 
 
@@ -97,3 +99,34 @@ def test_truncated_when_max_tokens():
     r = adapter.query("s", "q")
     assert r.status == "TRUNCATED"
     assert r.finish_reason == "length"
+
+
+def _grounded_gemini_resp():
+    web = SimpleNamespace(uri="https://src/g", title="Gemini Source")
+    chunk = SimpleNamespace(web=web)
+    gm = SimpleNamespace(grounding_chunks=[chunk])
+    cand = SimpleNamespace(finish_reason="STOP", grounding_metadata=gm)
+    return SimpleNamespace(
+        candidates=[cand],
+        text="Grounded gemini answer.",
+        prompt_feedback=None,
+        usage_metadata=SimpleNamespace(prompt_token_count=8, candidates_token_count=4),
+    )
+
+
+def test_gemini_grounded_passes_search_tool_and_parses_citations():
+    captured = {}
+
+    class _Model:
+        def generate_content(self, content, **kwargs):
+            captured.update(kwargs)
+            return _grounded_gemini_resp()
+
+    adapter = GeminiAdapter(
+        name="Gemini-2.5-Pro-Grounded", model_version="gemini-2.5-pro",
+        params={}, model_factory=lambda sp: _Model(), grounded=True,
+    )
+    out = adapter.query("sys", "q?")
+    assert captured.get("tools") == [{"google_search": {}}]
+    assert out.status == "SUCCESS"
+    assert [(c.title, c.url) for c in out.citations] == [("Gemini Source", "https://src/g")]
