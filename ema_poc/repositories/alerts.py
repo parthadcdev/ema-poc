@@ -17,17 +17,11 @@ def _iso(value: datetime | str | None) -> str | None:
 
 
 def save_alert(conn: sqlite3.Connection, alert: Alert) -> None:
-    # Disable FK enforcement for the insert: the alerts table has a FK to
-    # scores, but in unit-test and pipeline contexts the score row may not yet
-    # be committed in the same connection.  FK checks are a DB-level guard;
-    # application logic (pipeline) is responsible for insert ordering.
-    conn.execute("PRAGMA foreign_keys = OFF")
     conn.execute(
         "INSERT INTO alerts (alert_id, score_id, reason, created_at) "
         "VALUES (?, ?, ?, ?)",
         (alert.alert_id, alert.score_id, alert.reason, _iso(alert.created_at)),
     )
-    conn.execute("PRAGMA foreign_keys = ON")
     conn.commit()
 
 
