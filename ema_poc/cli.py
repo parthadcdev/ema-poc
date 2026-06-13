@@ -29,6 +29,7 @@ class Deps:
     env: Mapping
     out: Callable
     build_dashboard: Callable | None = None
+    serve_app: Callable | None = None
 
 
 def _make_scoring_client(env):
@@ -52,6 +53,10 @@ def default_deps() -> Deps:
     from ema_poc.dashboard.build import build_dashboard
     from ema_poc.scoring.pipeline import score_pending
 
+    def _serve_app(app, *, host, port):
+        import uvicorn
+        uvicorn.run(app, host=host, port=port)
+
     return Deps(
         load_config=load_config,
         connect=connect,
@@ -67,6 +72,7 @@ def default_deps() -> Deps:
         env=os.environ,
         out=print,
         build_dashboard=build_dashboard,
+        serve_app=_serve_app,
     )
 
 
@@ -94,6 +100,10 @@ def _parse_args(argv):
     p_dash = sub.add_parser("dashboard", help="Generate the self-contained HTML dashboard")
     p_dash.add_argument("--out", default="dashboard.html")
 
+    p_serve = sub.add_parser("serve", help="Launch the real-time playground web UI")
+    p_serve.add_argument("--host", default="127.0.0.1")
+    p_serve.add_argument("--port", type=int, default=8000)
+
     return parser.parse_args(argv)
 
 
@@ -108,7 +118,7 @@ def main(argv=None, deps: Deps | None = None) -> int:
     args = _parse_args(argv)
     config = deps.load_config(args.config_dir)
 
-    if args.command in ("run", "dry-run", "score", "healthcheck"):
+    if args.command in ("run", "dry-run", "score", "healthcheck", "serve"):
         deps.validate_credentials(config, deps.env)
 
     if args.command == "import-questions":
@@ -139,6 +149,32 @@ def main(argv=None, deps: Deps | None = None) -> int:
         client = deps.make_scoring_client(deps.env)
         scoring = deps.score_pending(conn, client=client, config=config)
         deps.out(f"Scored {scoring.scored}, alerts raised {scoring.alerts_raised}")
+        return 0
+
+    if args.command == "serve":
+        from ema_poc.web.app import create_app, WebDeps
+        from ema_poc.config import AppConfig
+        from ema_poc.scoring.scorer import score_response
+
+        def build_adapters_for(names):
+            if names:
+                wanted = set(names)
+                filtered = [t for t in config.targets if t.name in wanted and t.enabled]
+            else:
+                filtered = [t for t in config.targets if t.enabled]
+            sub_cfg = AppConfig(settings=config.settings, brands=config.brands, targets=filtered)
+            return deps.build_adapters(sub_cfg, deps.env)
+
+        web_deps = WebDeps(
+            config=config,
+            build_adapters_for=build_adapters_for,
+            scoring_client=deps.make_scoring_client(deps.env),
+            scorer=score_response,
+            db_path=config.settings.db_path,
+        )
+        app = create_app(web_deps)
+        deps.out(f"Playground on http://{args.host}:{args.port} (Ctrl-C to stop)")
+        deps.serve_app(app, host=args.host, port=args.port)
         return 0
 
     # run
