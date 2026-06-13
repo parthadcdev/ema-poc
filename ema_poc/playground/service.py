@@ -44,7 +44,11 @@ def run_playground(
         }
         for fut in as_completed(futures):
             adapter = futures[fut]
-            llm_response = fut.result()
+            try:
+                llm_response = fut.result()
+            except Exception as exc:
+                yield {"event": "error", "llm_name": adapter.name, "message": str(exc)}
+                continue
 
             rid = S.save_response(
                 conn, query_id=query_id, llm_name=adapter.name,
