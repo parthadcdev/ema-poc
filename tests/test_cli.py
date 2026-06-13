@@ -120,3 +120,46 @@ def test_run_with_run_id_resumes():
     rc = main(["run", "--run-id", "run-xyz"], deps=deps)
     assert rc == 0
     assert calls["run"]["run_id"] == "run-xyz"
+
+
+def test_serve_builds_app_and_binds_localhost(tmp_path):
+    from ema_poc.cli import main
+    from ema_poc.config import AppConfig, Settings, BrandConfig, LLMTargetConfig, PricingConfig, RateLimitConfig
+
+    recorded = {}
+
+    def fake_serve_app(app, *, host, port):
+        recorded["host"] = host
+        recorded["port"] = port
+        recorded["has_stream_route"] = any(
+            getattr(r, "path", None) == "/api/ask/stream" for r in app.routes
+        )
+
+    target = LLMTargetConfig(
+        name="fake-target",
+        adapter="openai",
+        model_version="gpt-4o",
+        api_key_env="OPENAI_API_KEY",
+        enabled=True,
+        grounded=False,
+        pricing=PricingConfig(input_per_1k=0.01, output_per_1k=0.03),
+        rate_limit=RateLimitConfig(requests_per_minute=60, tokens_per_minute=100000),
+    )
+    config = AppConfig(
+        settings=Settings(db_path=str(tmp_path / "ema.sqlite")),
+        brands=BrandConfig(),
+        targets=[target],
+    )
+
+    deps, out_lines, calls = _fake_deps(
+        load_config=lambda d: config,
+        build_adapters=lambda cfg, env: [],
+        make_scoring_client=lambda env: "FAKE_CLIENT",
+    )
+    deps.serve_app = fake_serve_app
+
+    rc = main(["serve", "--port", "9999"], deps=deps)
+    assert rc == 0
+    assert recorded["host"] == "127.0.0.1"
+    assert recorded["port"] == 9999
+    assert recorded["has_stream_route"] is True

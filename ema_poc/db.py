@@ -109,6 +109,43 @@ CREATE TABLE IF NOT EXISTS audit_log (
     http_status INTEGER,
     detail      TEXT
 );
+
+CREATE TABLE IF NOT EXISTS sandbox_queries (
+    query_id      TEXT PRIMARY KEY,
+    timestamp_utc TEXT NOT NULL,
+    question_text TEXT NOT NULL,
+    persona       TEXT,
+    brand_focus   TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sandbox_responses (
+    sandbox_response_id  TEXT PRIMARY KEY,
+    query_id             TEXT NOT NULL,
+    llm_name             TEXT NOT NULL,
+    llm_model_version    TEXT NOT NULL,
+    grounded             INTEGER NOT NULL DEFAULT 0,
+    answer_text          TEXT,
+    response_tokens      INTEGER,
+    finish_reason        TEXT,
+    status               TEXT NOT NULL,
+    sentiment_score      REAL,
+    competitive_position TEXT,
+    scoring_rationale    TEXT,
+    created_at           TEXT NOT NULL,
+    FOREIGN KEY (query_id) REFERENCES sandbox_queries(query_id)
+);
+CREATE INDEX IF NOT EXISTS idx_sandbox_resp_query ON sandbox_responses(query_id);
+
+CREATE TABLE IF NOT EXISTS sandbox_citations (
+    citation_id          TEXT PRIMARY KEY,
+    sandbox_response_id  TEXT NOT NULL,
+    title                TEXT NOT NULL,
+    url                  TEXT NOT NULL,
+    snippet              TEXT,
+    created_at           TEXT NOT NULL,
+    FOREIGN KEY (sandbox_response_id) REFERENCES sandbox_responses(sandbox_response_id)
+);
+CREATE INDEX IF NOT EXISTS idx_sandbox_cit_resp ON sandbox_citations(sandbox_response_id);
 """
 
 

@@ -14,10 +14,12 @@ dependencies = [
     "anthropic",
     "openai",
     "google-generativeai",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov"]
+dev = ["pytest", "pytest-cov", "httpx>=0.27"]
 
 [project.scripts]
 ema = "ema_poc.cli:main"

@@ -66,6 +66,21 @@ specific run** that was interrupted mid-execution, pass its id:
 The runner then re-dispatches only the question/target pairs not yet captured
 for that run (FR-504).
 
+## Real-time playground
+
+Launch a local web UI to ask ad-hoc questions across all targets (including the
+web-grounded variants), with live per-model answers, citations, and scoring:
+
+```bash
+set -a; . ./.env; set +a       # load API keys
+ema serve                      # http://127.0.0.1:8000
+```
+
+Open the URL, type a question, pick targets/persona, and watch each model's
+answer stream in. Results are stored in the isolated `sandbox_*` tables,
+separate from the approval-gated monitoring data, and never feed the official
+dashboard. Do not enter PII/PHI.
+
 ## Status
 
 Foundations phase complete (config, storage, models, logging, audit).
