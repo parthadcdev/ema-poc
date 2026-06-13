@@ -77,7 +77,8 @@ def test_scoring_pass_end_to_end_with_rescore(tmp_path):
 
     alerts = list_alerts(conn)
     assert len(alerts) == 1
-    assert alerts[0].reason in {"SENTIMENT_BELOW_THRESHOLD", "COMPETITIVE_POSITION_NOT_RECOMMENDED"}
+    # sentiment -0.6 is below -0.3, so SENTIMENT_BELOW_THRESHOLD fires first by priority
+    assert alerts[0].reason == "SENTIMENT_BELOW_THRESHOLD"
 
     # re-score "neg": a corrected score -> new version (FR-407), original preserved
     v = next_score_version(conn, "neg")

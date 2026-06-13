@@ -67,6 +67,8 @@ def test_score_response_call_shape_opus48_rules():
     assert kw["output_format"] is ScoreResult
     assert kw["thinking"] == {"type": "adaptive"}
     assert "temperature" not in kw  # Opus 4.8 rejects temperature
+    assert "top_p" not in kw
+    assert "budget_tokens" not in kw
     user_content = kw["messages"][0]["content"]
     assert "text about Skyrizi" in user_content
     assert "Skyrizi" in user_content

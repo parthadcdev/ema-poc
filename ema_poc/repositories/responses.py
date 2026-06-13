@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from ema_poc.adapters.base import LLMResponse
-from ema_poc.models import Question, Response
+from ema_poc.models import CompetitivePosition, Question, Response
 
 
 def _iso(value: datetime | str | None) -> str | None:
@@ -271,7 +271,7 @@ def update_response_scoring(
     response_id: str,
     *,
     sentiment_score: float | None,
-    competitive_position,
+    competitive_position: CompetitivePosition | str,
     alert_triggered: bool,
 ) -> None:
     """Update ONLY the derived/denormalized scoring columns on a response
