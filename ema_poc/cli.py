@@ -1,0 +1,147 @@
+"""Operator CLI (FR-209/210/501/506, NF-008/009).
+
+Command logic dispatches through an injectable Deps bundle so it can be tested
+without network or vendor SDKs. default_deps() wires the real implementations;
+vendor SDKs are imported lazily only when a real run/score happens."""
+
+from __future__ import annotations
+
+import argparse
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+
+from ema_poc.reporting import format_health_report, format_run_report
+
+
+@dataclass
+class Deps:
+    load_config: Callable
+    connect: Callable
+    init_schema: Callable
+    validate_credentials: Callable
+    build_adapters: Callable
+    make_scoring_client: Callable
+    run: Callable
+    score_pending: Callable
+    check_targets: Callable
+    import_csv: Callable
+    import_excel: Callable
+    env: Mapping
+    out: Callable
+
+
+def _make_scoring_client(env):
+    import anthropic
+
+    return anthropic.Anthropic(api_key=env.get("ANTHROPIC_API_KEY"))
+
+
+def default_deps() -> Deps:
+    import os
+
+    from ema_poc.adapters.registry import build_adapters
+    from ema_poc.agent.runner import run
+    from ema_poc.config import load_config, validate_credentials
+    from ema_poc.connectivity import check_targets
+    from ema_poc.db import connect, init_schema
+    from ema_poc.repositories.questions import (
+        import_questions_csv,
+        import_questions_excel,
+    )
+    from ema_poc.scoring.pipeline import score_pending
+
+    return Deps(
+        load_config=load_config,
+        connect=connect,
+        init_schema=init_schema,
+        validate_credentials=validate_credentials,
+        build_adapters=build_adapters,
+        make_scoring_client=_make_scoring_client,
+        run=run,
+        score_pending=score_pending,
+        check_targets=check_targets,
+        import_csv=import_questions_csv,
+        import_excel=import_questions_excel,
+        env=os.environ,
+        out=print,
+    )
+
+
+def _parse_args(argv):
+    parser = argparse.ArgumentParser(prog="ema", description="Evidence Monitoring Agent")
+    parser.add_argument("--config-dir", default="config")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p_run = sub.add_parser("run", help="Run the question bank against all targets")
+    p_run.add_argument("--persona")
+    p_run.add_argument("--ta", dest="therapeutic_area")
+    p_run.add_argument("--brand", dest="brand_focus")
+    p_run.add_argument("--domain")
+    p_run.add_argument("--score", action="store_true", help="Score responses after the run")
+
+    sub.add_parser("dry-run", help="Validate config + target connectivity (no writes)")
+    sub.add_parser("score", help="Score unscored responses")
+    sub.add_parser("healthcheck", help="Check connectivity to all targets")
+
+    p_imp = sub.add_parser("import-questions", help="Import questions from CSV/Excel")
+    p_imp.add_argument("path")
+
+    return parser.parse_args(argv)
+
+
+def _open_db(deps: Deps, config):
+    conn = deps.connect(config.settings.db_path)
+    deps.init_schema(conn)
+    return conn
+
+
+def main(argv=None, deps: Deps | None = None) -> int:
+    deps = deps or default_deps()
+    args = _parse_args(argv)
+    config = deps.load_config(args.config_dir)
+
+    if args.command in ("run", "dry-run", "score", "healthcheck"):
+        deps.validate_credentials(config, deps.env)
+
+    if args.command == "import-questions":
+        conn = _open_db(deps, config)
+        path = args.path
+        n = (
+            deps.import_excel(conn, path)
+            if path.lower().endswith((".xlsx", ".xls"))
+            else deps.import_csv(conn, path)
+        )
+        deps.out(f"Imported {n} questions from {path}")
+        return 0
+
+    if args.command in ("dry-run", "healthcheck"):
+        adapters = deps.build_adapters(config, deps.env)
+        statuses = deps.check_targets(adapters)
+        deps.out(format_health_report(statuses))
+        return 0 if all(s.ok for s in statuses) else 1
+
+    if args.command == "score":
+        conn = _open_db(deps, config)
+        client = deps.make_scoring_client(deps.env)
+        scoring = deps.score_pending(conn, client=client, config=config)
+        deps.out(f"Scored {scoring.scored}, alerts raised {scoring.alerts_raised}")
+        return 0
+
+    # run
+    conn = _open_db(deps, config)
+    adapters = deps.build_adapters(config, deps.env)
+    summary = deps.run(
+        conn, adapters, config,
+        persona=args.persona, therapeutic_area=args.therapeutic_area,
+        brand_focus=args.brand_focus, domain=args.domain,
+    )
+    scoring = None
+    if args.score:
+        client = deps.make_scoring_client(deps.env)
+        scoring = deps.score_pending(conn, client=client, config=config)
+    deps.out(format_run_report(summary, scoring))
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())
