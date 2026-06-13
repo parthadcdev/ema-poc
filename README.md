@@ -55,8 +55,14 @@ The POC runs unattended via OS cron. Example crontab entry for a daily run at
 0 2 * * *  cd /path/to/ema-poc && . .venv/bin/activate && ema run --score >> logs/cron.log 2>&1
 ```
 
-Runs are resumable: re-invoking `ema run` continues an interrupted run without
-re-submitting already-captured responses.
+Each `ema run` starts a new run with a fresh `run_id`, so daily cron runs are
+independent. Responses are append-only and are never overwritten. To **resume a
+specific run** that was interrupted mid-execution, pass its id:
+
+    ema run --run-id <RUN_ID>
+
+The runner then re-dispatches only the question/target pairs not yet captured
+for that run (FR-504).
 
 ## Status
 

@@ -96,3 +96,27 @@ def test_import_questions_csv():
     assert rc == 0
     assert calls["imported"] == "questions.csv"
     assert any("Imported 7" in line for line in out)
+
+
+def test_dry_run_does_not_open_db_and_returns_one_when_down():
+    opened = {"connect": False}
+
+    def _connect(p):
+        opened["connect"] = True
+        return "CONN"
+
+    deps, out, calls = _fake_deps(
+        connect=_connect,
+        check_targets=lambda adapters: [TargetStatus("Claude", False, "error: x")],
+    )
+    rc = main(["dry-run"], deps=deps)
+    assert rc == 1  # a target is down
+    assert opened["connect"] is False  # dry-run never opens the DB
+    assert any("FAIL" in line for line in out)
+
+
+def test_run_with_run_id_resumes():
+    deps, out, calls = _fake_deps()
+    rc = main(["run", "--run-id", "run-xyz"], deps=deps)
+    assert rc == 0
+    assert calls["run"]["run_id"] == "run-xyz"

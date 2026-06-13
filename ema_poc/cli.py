@@ -77,6 +77,8 @@ def _parse_args(argv):
     p_run.add_argument("--ta", dest="therapeutic_area")
     p_run.add_argument("--brand", dest="brand_focus")
     p_run.add_argument("--domain")
+    p_run.add_argument("--run-id", dest="run_id", default=None,
+                       help="Resume an existing run by id (re-dispatches only uncaptured work)")
     p_run.add_argument("--score", action="store_true", help="Score responses after the run")
 
     sub.add_parser("dry-run", help="Validate config + target connectivity (no writes)")
@@ -132,6 +134,7 @@ def main(argv=None, deps: Deps | None = None) -> int:
     adapters = deps.build_adapters(config, deps.env)
     summary = deps.run(
         conn, adapters, config,
+        run_id=args.run_id,
         persona=args.persona, therapeutic_area=args.therapeutic_area,
         brand_focus=args.brand_focus, domain=args.domain,
     )

@@ -3,11 +3,12 @@ import questions -> run -> score, asserting persisted responses, scores, and
 that the run command reports a summary."""
 
 from ema_poc.adapters.base import LLMResponse
+from ema_poc.agent.runner import run as _runner_run
 from ema_poc.cli import Deps, main
 from ema_poc.config import AppConfig, BrandConfig, Settings
 from ema_poc.connectivity import check_targets
 from ema_poc.db import connect, init_schema
-from ema_poc.repositories.questions import approve_question, list_questions
+from ema_poc.repositories.questions import approve_question, import_questions_csv as _import_csv, list_questions
 from ema_poc.repositories.responses import query_responses
 from ema_poc.repositories.scores import latest_score
 from ema_poc.scoring.pipeline import score_pending
@@ -65,11 +66,10 @@ def test_cli_import_run_score_end_to_end(tmp_path):
         validate_credentials=lambda config, env: None,
         build_adapters=lambda config, env: [_Adapter("GPT-4o")],
         make_scoring_client=lambda env: object(),
-        run=__import__("ema_poc.agent.runner", fromlist=["run"]).run,
+        run=_runner_run,
         score_pending=_score,
         check_targets=check_targets,
-        import_csv=__import__("ema_poc.repositories.questions",
-                              fromlist=["import_questions_csv"]).import_questions_csv,
+        import_csv=_import_csv,
         import_excel=lambda conn, path: 0,
         env={"ANTHROPIC_API_KEY": "k"},
         out=out.append,
