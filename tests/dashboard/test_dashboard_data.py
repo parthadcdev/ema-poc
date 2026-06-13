@@ -17,11 +17,11 @@ def _conn(tmp_path):
     return conn
 
 
-def _resp(conn, rid, *, llm, ts, brand, text="ans"):
+def _resp(conn, rid, *, llm, ts, brand, ta="Immunology", text="ans"):
     save_response(conn, Response(
         response_id=rid, run_id="r1", timestamp_utc=ts, llm_name=llm,
         llm_model_version="m", persona="Provider", question_id="Q1",
-        question_text="q", therapeutic_area="Immunology", brand_focus=brand,
+        question_text="q", therapeutic_area=ta, brand_focus=brand,
         domain="Safety", response_text=text, response_tokens=1,
         finish_reason="stop", status="SUCCESS", created_at=ts,
     ))
@@ -46,7 +46,7 @@ def test_build_dashboard_data_aggregates(tmp_path):
                       rationale="negative")
     save_alert(conn, Alert(alert_id="al-1", score_id="b-s1",
                            reason="SENTIMENT_BELOW_THRESHOLD", created_at=T1))
-    _resp(conn, "c", llm="GPT-4o", ts=T2, brand="Rinvoq")
+    _resp(conn, "c", llm="GPT-4o", ts=T2, brand="Rinvoq", ta="Oncology")
     _score_and_denorm(conn, "c", sentiment=0.2, position="AMONG_OPTIONS", alert=False)
 
     data = build_dashboard_data(conn)
@@ -55,8 +55,9 @@ def test_build_dashboard_data_aggregates(tmp_path):
     assert data.total_alerts == 1
     assert data.sentiment_by_llm["GPT-4o"] == 0.5
     assert data.sentiment_by_llm["Gemini"] == -0.6
-    assert round(data.sentiment_by_therapy["Skyrizi"], 3) == round((0.8 + -0.6) / 2, 3)
-    assert data.sentiment_by_therapy["Rinvoq"] == 0.2
+    # grouped by therapeutic_area now (a + b are Immunology; c is Oncology)
+    assert round(data.sentiment_by_therapy["Immunology"], 3) == round((0.8 + -0.6) / 2, 3)
+    assert data.sentiment_by_therapy["Oncology"] == 0.2
     assert data.position_by_llm["GPT-4o"]["FIRST_LINE_RECOMMENDED"] == 1
     assert data.position_by_llm["GPT-4o"]["AMONG_OPTIONS"] == 1
     assert data.position_by_llm["Gemini"]["NOT_RECOMMENDED"] == 1

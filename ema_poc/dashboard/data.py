@@ -19,6 +19,8 @@ class DashboardData:
 
 
 def _alert_reasons(conn: sqlite3.Connection) -> dict[str, str]:
+    """Map response_id -> alert reason. If a response has multiple alert rows,
+    the last one from the join wins (POC responses trigger at most one alert)."""
     rows = conn.execute(
         """
         SELECT r.response_id AS response_id, a.reason AS reason
@@ -63,7 +65,7 @@ def build_dashboard_data(conn: sqlite3.Connection) -> DashboardData:
     for r in rows:
         if r["sentiment_score"] is not None:
             by_llm.setdefault(r["llm_name"], []).append(r["sentiment_score"])
-            by_therapy.setdefault(r["brand_focus"] or "Unknown", []).append(
+            by_therapy.setdefault(r["therapeutic_area"] or "Unknown", []).append(
                 r["sentiment_score"]
             )
         if r["competitive_position"]:
@@ -71,7 +73,7 @@ def build_dashboard_data(conn: sqlite3.Connection) -> DashboardData:
             counts[r["competitive_position"]] = (
                 counts.get(r["competitive_position"], 0) + 1
             )
-        date = (r["timestamp_utc"] or "")[:10]
+        date = (r["timestamp_utc"] or "")[:10] or "Unknown"
         volume_by_date[date] = volume_by_date.get(date, 0) + 1
 
     sentiment_by_llm = {k: round(_mean(v), 3) for k, v in by_llm.items()}

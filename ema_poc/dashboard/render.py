@@ -111,7 +111,7 @@ def _select(el_id: str, label: str, options) -> str:
     opts = "<option value=''>All</option>" + "".join(
         "<option value='" + _e(o) + "'>" + _e(o) + "</option>" for o in options
     )
-    return "<label>" + _e(label) + ": <select id='" + el_id + "'>" + opts + "</select></label>"
+    return "<label>" + _e(label) + ": <select id='" + _e(el_id) + "'>" + opts + "</select></label>"
 
 
 def _responses_table(rows: list[dict]) -> str:
