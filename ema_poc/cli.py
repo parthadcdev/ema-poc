@@ -28,6 +28,7 @@ class Deps:
     import_excel: Callable
     env: Mapping
     out: Callable
+    build_dashboard: Callable | None = None
 
 
 def _make_scoring_client(env):
@@ -48,6 +49,7 @@ def default_deps() -> Deps:
         import_questions_csv,
         import_questions_excel,
     )
+    from ema_poc.dashboard.build import build_dashboard
     from ema_poc.scoring.pipeline import score_pending
 
     return Deps(
@@ -64,6 +66,7 @@ def default_deps() -> Deps:
         import_excel=import_questions_excel,
         env=os.environ,
         out=print,
+        build_dashboard=build_dashboard,
     )
 
 
@@ -87,6 +90,9 @@ def _parse_args(argv):
 
     p_imp = sub.add_parser("import-questions", help="Import questions from CSV/Excel")
     p_imp.add_argument("path")
+
+    p_dash = sub.add_parser("dashboard", help="Generate the self-contained HTML dashboard")
+    p_dash.add_argument("--out", default="dashboard.html")
 
     return parser.parse_args(argv)
 
@@ -114,6 +120,12 @@ def main(argv=None, deps: Deps | None = None) -> int:
             else deps.import_csv(conn, path)
         )
         deps.out(f"Imported {n} questions from {path}")
+        return 0
+
+    if args.command == "dashboard":
+        conn = _open_db(deps, config)
+        path = deps.build_dashboard(conn, args.out)
+        deps.out(f"Dashboard written to {path}")
         return 0
 
     if args.command in ("dry-run", "healthcheck"):
