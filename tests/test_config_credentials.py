@@ -46,3 +46,20 @@ def test_ignores_disabled_targets():
     cfg = _config([_target("Gemini", "GOOGLE_API_KEY", enabled=False)])
     env = {"ANTHROPIC_API_KEY": "sk-a"}
     validate_credentials(cfg, env)  # disabled target's key not required
+
+
+def test_target_grounded_defaults_false_and_parses_true(tmp_path):
+    from ema_poc.config import LLMTargetConfig
+
+    t = LLMTargetConfig(
+        name="X", adapter="openai", model_version="m", api_key_env="K",
+        pricing={"input_per_1k": 0.0, "output_per_1k": 0.0},
+        rate_limit={"requests_per_minute": 1, "tokens_per_minute": 1},
+    )
+    assert t.grounded is False
+    t2 = LLMTargetConfig(
+        name="Xg", adapter="openai", model_version="m", api_key_env="K", grounded=True,
+        pricing={"input_per_1k": 0.0, "output_per_1k": 0.0},
+        rate_limit={"requests_per_minute": 1, "tokens_per_minute": 1},
+    )
+    assert t2.grounded is True
