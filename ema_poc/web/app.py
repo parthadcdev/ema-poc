@@ -49,13 +49,14 @@ def create_app(deps: WebDeps) -> FastAPI:
         question: str = Query(...),
         persona: str | None = Query(None),
         brand_focus: str | None = Query(None),
-        targets: str | None = Query(None),
+        selected_targets: str | None = Query(None, alias="targets"),
     ):
         if not question or not question.strip():
             raise HTTPException(status_code=400, detail="question is required")
 
-        selected = [t.strip() for t in targets.split(",")] if targets else None
+        selected = [t.strip() for t in selected_targets.split(",")] if selected_targets else None
         cfg = deps.config
+        now = datetime.now(timezone.utc).isoformat()
 
         def event_stream():
             conn = connect(deps.db_path)
@@ -71,7 +72,7 @@ def create_app(deps: WebDeps) -> FastAPI:
                     question_text=question.strip(), persona=persona, brand_focus=brand_focus,
                     model=cfg.settings.scoring_model,
                     id_factory=lambda: uuid4().hex,
-                    now=datetime.now(timezone.utc).isoformat(),
+                    now=now,
                     max_retries=cfg.settings.max_retries,
                     backoff=cfg.settings.backoff_seconds,
                 )
