@@ -127,25 +127,30 @@ def _responses_table(rows: list[dict]) -> str:
         + "<label>To <input type='date' id='f-to'></label>"
         + "</div>"
     )
-    head = ("<tr><th>Time</th><th>LLM</th><th>Persona</th><th>Brand</th>"
-            "<th>Status</th><th>Sentiment</th><th>Position</th></tr>")
+    head = ("<tr><th>Time</th><th>Question</th><th>LLM</th><th>Persona</th>"
+            "<th>Brand</th><th>Status</th><th>Sentiment</th><th>Position</th></tr>")
     body = ""
     for r in rows:
         date = (r["timestamp_utc"] or "")[:10]
         mark = " ⚠" if r["alert_triggered"] else ""
         sentiment = "" if r["sentiment_score"] is None else _e(r["sentiment_score"])
+        qid = _e(r.get("question_id"))
+        qtext = r.get("question_text") or ""
+        qshort = qtext if len(qtext) <= 70 else qtext[:67] + "…"
+        question_cell = "<strong>" + qid + "</strong> " + _e(qshort)
         body += (
             "<tr class='resp' data-persona='" + _e(r["persona"]) + "' data-ta='"
             + _e(r["therapeutic_area"]) + "' data-llm='" + _e(r["llm_name"])
             + "' data-date='" + _e(date) + "'>"
-            + "<td>" + _e(r["timestamp_utc"]) + "</td><td>" + _e(r["llm_name"])
+            + "<td>" + _e(r["timestamp_utc"]) + "</td><td>" + question_cell
+            + "</td><td>" + _e(r["llm_name"])
             + "</td><td>" + _e(r["persona"]) + "</td><td>" + _e(r["brand_focus"])
             + "</td><td>" + _e(r["status"]) + mark + "</td><td>" + sentiment
             + "</td><td>" + _e(r["competitive_position"]) + "</td></tr>"
         )
-        detail = ("Response: " + _e(r["response_text"]) + "\n\nRationale: "
-                  + _e(r["scoring_rationale"]))
-        body += ("<tr class='detail' style='display:none'><td colspan='7'>"
+        detail = ("Question: " + _e(qtext) + "\n\nResponse: " + _e(r["response_text"])
+                  + "\n\nRationale: " + _e(r["scoring_rationale"]))
+        body += ("<tr class='detail' style='display:none'><td colspan='8'>"
                  + detail + "</td></tr>")
     return controls + "<table>" + head + body + "</table>"
 

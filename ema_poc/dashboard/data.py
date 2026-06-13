@@ -35,7 +35,8 @@ def _alert_reasons(conn: sqlite3.Connection) -> dict[str, str]:
 def collect_rows(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         """
-        SELECT r.response_id, r.llm_name, r.persona, r.therapeutic_area,
+        SELECT r.response_id, r.question_id, r.question_text, r.llm_name,
+               r.persona, r.therapeutic_area,
                r.brand_focus, r.domain, r.timestamp_utc, r.status,
                r.sentiment_score, r.competitive_position, r.alert_triggered,
                r.response_text,
