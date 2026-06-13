@@ -1,3 +1,5 @@
+import pytest
+
 from ema_poc.adapters.base import LLMResponse
 from ema_poc.agent.runner import run
 from ema_poc.config import (
@@ -134,4 +136,23 @@ def test_resume_skips_completed_and_retries_failed(tmp_path):
     assert completed_keys(conn, "run-1") == {
         ("Q1", "GPT-4o"), ("Q1", "Gemini"), ("Q2", "GPT-4o"), ("Q2", "Gemini"),
     }
+    conn.close()
+
+
+def test_run_marks_run_failed_when_a_db_write_raises(tmp_path, monkeypatch):
+    import sqlite3
+
+    conn = _conn(tmp_path)
+    _seed_two_approved(conn)
+
+    def boom(*args, **kwargs):
+        raise sqlite3.OperationalError("disk full")
+
+    monkeypatch.setattr("ema_poc.agent.runner.save_response", boom)
+    a = _Adapter("GPT-4o", LLMResponse("x", "stop", "SUCCESS", prompt_tokens=1, completion_tokens=1))
+    with pytest.raises(sqlite3.OperationalError):
+        run(conn, [a], _config(["GPT-4o"]), run_id="run-1", id_factory=_ids(),
+            now_factory=lambda: NOW, rate_limiters={}, sleep=lambda d: None)
+    # the run row is finalized to FAILED, not left stuck in RUNNING
+    assert get_run(conn, "run-1").status == "FAILED"
     conn.close()

@@ -23,6 +23,8 @@ def execute(
     rate_limiter=None,
     sleep=time.sleep,
 ) -> LLMResponse:
+    if not backoff:
+        raise ValueError("backoff must be a non-empty list of delays")
     last_exc: Exception | None = None
     for attempt in range(max_retries + 1):  # initial attempt + max_retries retries
         if rate_limiter is not None:

@@ -80,6 +80,7 @@ def run(
     est_cost = 0.0
 
     pool = ThreadPoolExecutor(max_workers=max_workers or max(1, len(adapters)))
+    run_status = "COMPLETED"
     try:
         for question in questions:
             system_prompt = resolve_system_prompt(question.persona, config.settings)
@@ -125,7 +126,7 @@ def run(
                     detail=llm_resp.status,
                 )
                 responses_captured += 1
-                by_status[llm_resp.status] = by_status.get(llm_resp.status, 0) + 1
+                by_status[llm_resp.status] += 1
                 if llm_resp.status == "FAILED":
                     failure_count += 1
                 ptok = llm_resp.prompt_tokens or 0
@@ -137,19 +138,22 @@ def run(
                         ptok / 1000 * price.input_per_1k
                         + ctok / 1000 * price.output_per_1k
                     )
+    except Exception:
+        run_status = "FAILED"
+        raise
     finally:
         pool.shutdown(wait=True)
-
-    finish_run(
-        conn,
-        run_id,
-        ended_at=now_factory(),
-        questions_attempted=questions_attempted,
-        responses_captured=responses_captured,
-        failure_count=failure_count,
-        total_tokens=total_tokens,
-        est_cost=est_cost,
-    )
+        finish_run(
+            conn,
+            run_id,
+            ended_at=now_factory(),
+            questions_attempted=questions_attempted,
+            responses_captured=responses_captured,
+            failure_count=failure_count,
+            total_tokens=total_tokens,
+            est_cost=est_cost,
+            status=run_status,
+        )
     return RunSummary(
         run_id=run_id,
         questions_attempted=questions_attempted,
