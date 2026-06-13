@@ -94,12 +94,14 @@ def set_response_score(
     conn, *, sandbox_response_id, sentiment_score, competitive_position,
     scoring_rationale, commit: bool = True,
 ) -> None:
-    conn.execute(
+    cur = conn.execute(
         """UPDATE sandbox_responses
            SET sentiment_score = ?, competitive_position = ?, scoring_rationale = ?
            WHERE sandbox_response_id = ?""",
         (sentiment_score, competitive_position, scoring_rationale, sandbox_response_id),
     )
+    if cur.rowcount == 0:
+        raise ValueError(f"No sandbox_response with id={sandbox_response_id!r}")
     if commit:
         conn.commit()
 

@@ -64,3 +64,41 @@ def test_response_fk_requires_existing_query(tmp_path):
             finish_reason="stop", status="SUCCESS",
             now="2026-01-01T00:00:00+00:00", id_factory=lambda: "sr1",
         )
+
+
+def test_set_response_score_raises_on_missing_id(tmp_path):
+    conn = _conn(tmp_path)
+    with pytest.raises(ValueError, match="No sandbox_response with id="):
+        S.set_response_score(
+            conn, sandbox_response_id="does-not-exist",
+            sentiment_score=0.5, competitive_position="AMONG_OPTIONS",
+            scoring_rationale="test",
+        )
+
+
+def test_save_response_citations_fk_rejects_unknown_response_id(tmp_path):
+    conn = _conn(tmp_path)
+    with pytest.raises(sqlite3.IntegrityError):
+        S.save_response_citations(
+            conn, sandbox_response_id="bogus-id",
+            citations=[Citation(title="T", url="https://t")],
+            now="2026-01-01T00:00:00+00:00", id_factory=lambda: "c1",
+        )
+
+
+def test_grounded_int_to_bool_round_trip(tmp_path):
+    conn = _conn(tmp_path)
+    qid = S.create_query(
+        conn, question_text="Test?", persona=None, brand_focus=None,
+        now="2026-01-01T00:00:00+00:00", id_factory=lambda: "q1",
+    )
+    S.save_response(
+        conn, query_id=qid, llm_name="GPT-4o", llm_model_version="gpt-4o",
+        grounded=False, answer_text="Answer.", response_tokens=5,
+        finish_reason="stop", status="SUCCESS", now="2026-01-01T00:00:00+00:00",
+        id_factory=lambda: "sr1",
+    )
+    rows = S.list_query_responses(conn, qid)
+    assert len(rows) == 1
+    r = rows[0]
+    assert r.grounded is False
