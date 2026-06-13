@@ -5,7 +5,9 @@ query-by-any-combination / export / diff surface is Phase 4."""
 
 from __future__ import annotations
 
+import difflib
 import sqlite3
+from dataclasses import dataclass
 from datetime import datetime
 
 from ema_poc.adapters.base import LLMResponse
@@ -203,3 +205,60 @@ def count_responses(conn: sqlite3.Connection, **filters) -> int:
         f"SELECT COUNT(*) AS c FROM responses{clause}", params
     ).fetchone()
     return row["c"]
+
+
+@dataclass
+class ResponseChange:
+    """Change detection result for a (question_id, llm_name) pair (FR-306,
+    BR-004). `changed` is False when there is no previous response."""
+
+    question_id: str
+    llm_name: str
+    changed: bool
+    previous_text: str | None
+    current_text: str | None
+    diff: str
+
+
+def latest_responses(
+    conn: sqlite3.Connection, question_id: str, llm_name: str, *, limit: int = 2
+) -> list[Response]:
+    """The most recent responses for a question/LLM pair, newest first."""
+    rows = conn.execute(
+        "SELECT * FROM responses WHERE question_id = ? AND llm_name = ? "
+        "ORDER BY timestamp_utc DESC, response_id DESC LIMIT ?",
+        (question_id, llm_name, limit),
+    ).fetchall()
+    return [Response(**dict(r)) for r in rows]
+
+
+def detect_change(
+    conn: sqlite3.Connection, question_id: str, llm_name: str
+) -> ResponseChange:
+    """Compare the current and previous response for a question/LLM pair and
+    return a ResponseChange with a unified diff when the text differs."""
+    recent = latest_responses(conn, question_id, llm_name, limit=2)
+    current = recent[0] if recent else None
+    previous = recent[1] if len(recent) > 1 else None
+    current_text = current.response_text if current else None
+    previous_text = previous.response_text if previous else None
+
+    if previous is None:
+        return ResponseChange(
+            question_id, llm_name, False, None, current_text, ""
+        )
+
+    changed = current_text != previous_text
+    diff = ""
+    if changed:
+        diff = "".join(
+            difflib.unified_diff(
+                previous_text.splitlines(keepends=True),
+                current_text.splitlines(keepends=True),
+                fromfile="previous",
+                tofile="current",
+            )
+        )
+    return ResponseChange(
+        question_id, llm_name, changed, previous_text, current_text, diff
+    )
