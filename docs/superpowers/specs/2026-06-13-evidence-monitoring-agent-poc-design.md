@@ -43,7 +43,7 @@ Automated system that submits a curated, persona-tagged bank of questions to mul
 Deterministic Python pipeline. Each module has one responsibility and is independently testable with no circular dependencies (NF-012).
 
 ```
-config/                      # YAML: settings.yaml, llm_targets.yaml, rate_limits.yaml (NF-010)
+config/                      # YAML: settings.yaml (settings + brand lists), llm_targets.yaml (targets + per-target rate limits + pricing) (NF-010)
 .env                         # API keys / secrets (never committed) (IN-501)
 ema_poc/
   config.py        Load + Pydantic-validate config; verify all credentials present/reachable at startup, else exit (IN-502)
@@ -154,7 +154,7 @@ Adaptive thinking; no temperature (Opus 4.8). Scores written as new versioned ro
 
 ## 7. Cross-Cutting
 
-- **Config (`config.py`):** `settings.yaml`, `llm_targets.yaml`, `rate_limits.yaml` + `.env`. Startup validates config (Pydantic) and verifies every required credential present/reachable, exiting with a clear error before any query (IN-501/502).
+- **Config (`config.py`):** `settings.yaml` (settings + brand lists), `llm_targets.yaml` (targets + per-target rate limits + pricing) + `.env`. Rate limits are consolidated into each target entry rather than a standalone `rate_limits.yaml`, so each target owns its own limits — still fully externalised per FR-207/NF-010. Startup validates config (Pydantic) and verifies every required credential present/reachable, exiting with a clear error before any query (IN-501/502).
 - **Logging (`logging_setup.py`):** structured JSON to file — run start/stop, dispatch, response, retry, error, alert — timestamp/severity/context (NF-007); redaction filter masks credential-pattern strings (SE-006).
 - **Audit (`audit.py`):** separate append-only/insert-only table; every external LLM call (timestamp, question_id, target, role, HTTP status) and scoring decision recorded for compliance review (BR-010, SE-003).
 - **Governance:** runner dispatches only `active AND APPROVED` questions (SE-002, BR-009). No PII stored/required; questions generic (SE-001, BR-012).
