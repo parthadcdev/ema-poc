@@ -3,12 +3,18 @@ app is testable with fakes and no network."""
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
+from uuid import uuid4
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+
+from ema_poc.db import connect, init_schema
+from ema_poc.playground.service import run_playground
 
 _STATIC = Path(__file__).parent / "static"
 
@@ -37,6 +43,44 @@ def create_app(deps: WebDeps) -> FastAPI:
                 for t in deps.config.targets if t.enabled
             ]
         })
+
+    @app.get("/api/ask/stream")
+    def ask_stream(
+        question: str = Query(...),
+        persona: str | None = Query(None),
+        brand_focus: str | None = Query(None),
+        targets: str | None = Query(None),
+    ):
+        if not question or not question.strip():
+            raise HTTPException(status_code=400, detail="question is required")
+
+        selected = [t.strip() for t in targets.split(",")] if targets else None
+        cfg = deps.config
+
+        def event_stream():
+            conn = connect(deps.db_path)
+            init_schema(conn)
+            try:
+                adapters = deps.build_adapters_for(selected)
+                gen = run_playground(
+                    conn, adapters=adapters, scoring_client=deps.scoring_client,
+                    scorer=deps.scorer,
+                    abbvie_brands=cfg.brands.abbvie_brands,
+                    competitor_brands=cfg.brands.competitor_brands,
+                    system_prompts=cfg.settings.system_prompts,
+                    question_text=question.strip(), persona=persona, brand_focus=brand_focus,
+                    model=cfg.settings.scoring_model,
+                    id_factory=lambda: uuid4().hex,
+                    now=datetime.now(timezone.utc).isoformat(),
+                    max_retries=cfg.settings.max_retries,
+                    backoff=cfg.settings.backoff_seconds,
+                )
+                for event in gen:
+                    yield "data: " + json.dumps(event) + "\n\n"
+            finally:
+                conn.close()
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
 
     app.state.deps = deps
     return app
