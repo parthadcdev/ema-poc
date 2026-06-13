@@ -11,7 +11,7 @@ import csv
 import sqlite3
 from datetime import datetime, timezone
 
-from ema_poc.models import Question
+from ema_poc.models import ApprovalStatus, Domain, Persona, Question
 
 
 def _now_iso() -> str:
@@ -30,7 +30,9 @@ def _question_from_row(row: sqlite3.Row) -> Question:
     return Question(**dict(row))
 
 
-def _insert_version(conn: sqlite3.Connection, q: Question) -> None:
+def _insert_version(
+    conn: sqlite3.Connection, q: Question, *, commit: bool = True
+) -> None:
     conn.execute(
         """
         INSERT INTO questions (
@@ -56,7 +58,8 @@ def _insert_version(conn: sqlite3.Connection, q: Question) -> None:
             q.delete_reason,
         ),
     )
-    conn.commit()
+    if commit:
+        conn.commit()
 
 
 def get_version(
@@ -87,6 +90,7 @@ def add_question(
     therapeutic_area: str | None = None,
     brand_focus: str | None = None,
     now: str | None = None,
+    commit: bool = True,
 ) -> Question:
     if get_current(conn, question_id) is not None:
         raise ValueError(f"Question already exists: {question_id}")
@@ -102,23 +106,23 @@ def add_question(
         created_at=now,
         updated_at=now,
     )
-    _insert_version(conn, q)
+    _insert_version(conn, q, commit=commit)
     return get_version(conn, question_id, 1)
 
 
-def _enum_value(x):
+def _enum_value(x: str | Persona | Domain | ApprovalStatus) -> str:
     return x.value if hasattr(x, "value") else x
 
 
 def list_questions(
     conn: sqlite3.Connection,
     *,
-    persona=None,
+    persona: str | Persona | None = None,
     therapeutic_area: str | None = None,
     brand_focus: str | None = None,
-    domain=None,
+    domain: str | Domain | None = None,
     active: bool | None = None,
-    approval_status=None,
+    approval_status: str | ApprovalStatus | None = None,
     include_deleted: bool = False,
 ) -> list[Question]:
     """Return the current version of each question, filtered. Excludes
@@ -159,11 +163,21 @@ def list_questions(
 
 
 def update_question(
-    conn: sqlite3.Connection, question_id: str, *, now: str | None = None, **changes
+    conn: sqlite3.Connection,
+    question_id: str,
+    *,
+    now: str | None = None,
+    commit: bool = True,
+    **changes,
 ) -> Question:
     """Write a new version with `changes` applied. `created_at` is preserved
     from the current version; `updated_at` is set to `now`. Raises KeyError if
-    the question does not exist."""
+    the question does not exist.
+    NOTE: fields not named in `changes` carry forward from the current version
+    — including approval_status. Editing question text on an APPROVED question
+    therefore keeps it APPROVED; whether a material edit should reset approval
+    to PENDING (re-approval per BR-009) is a Medical Affairs policy decision and
+    is intentionally NOT enforced here."""
     current = get_current(conn, question_id)
     if current is None:
         raise KeyError(f"No such question: {question_id}")
@@ -172,7 +186,7 @@ def update_question(
     data["version"] = current.version + 1
     data["updated_at"] = now or _now_iso()
     new = Question(**data)  # re-validates the applied changes
-    _insert_version(conn, new)
+    _insert_version(conn, new, commit=commit)
     return get_version(conn, question_id, new.version)
 
 
@@ -244,7 +258,7 @@ def active_approved(conn: sqlite3.Connection) -> list[Question]:
     return list_questions(conn, active=True, approval_status="APPROVED")
 
 
-def _coerce_optional(value) -> str | None:
+def _coerce_optional(value: object) -> str | None:
     if value is None:
         return None
     value = str(value).strip()
@@ -261,9 +275,9 @@ def _upsert_row(conn: sqlite3.Connection, row: dict, now: str) -> None:
         brand_focus=_coerce_optional(row.get("brand_focus")),
     )
     if get_current(conn, qid) is None:
-        add_question(conn, question_id=qid, now=now, **fields)
+        add_question(conn, question_id=qid, now=now, commit=False, **fields)
     else:
-        update_question(conn, qid, now=now, **fields)
+        update_question(conn, qid, now=now, commit=False, **fields)
 
 
 def import_questions_csv(
@@ -275,8 +289,13 @@ def import_questions_csv(
     now = now or _now_iso()
     with open(path, newline="", encoding="utf-8") as fh:
         rows = list(csv.DictReader(fh))
-    for row in rows:
-        _upsert_row(conn, row, now)
+    try:
+        for row in rows:
+            _upsert_row(conn, row, now)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     return len(rows)
 
 
@@ -294,11 +313,16 @@ def import_questions_excel(
         rows_iter = ws.iter_rows(values_only=True)
         headers = list(next(rows_iter))
         count = 0
-        for values in rows_iter:
-            if all(v is None for v in values):
-                continue
-            _upsert_row(conn, dict(zip(headers, values)), now)
-            count += 1
+        try:
+            for values in rows_iter:
+                if all(v is None for v in values):
+                    continue
+                _upsert_row(conn, dict(zip(headers, values)), now)
+                count += 1
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
         return count
     finally:
         wb.close()

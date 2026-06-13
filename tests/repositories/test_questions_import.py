@@ -1,3 +1,4 @@
+import pytest
 from openpyxl import Workbook
 
 from ema_poc.db import connect, init_schema
@@ -71,4 +72,21 @@ def test_import_excel_adds_questions(tmp_path):
     count = import_questions_excel(conn, str(xlsx), now=NOW)
     assert count == 1
     assert get_current(conn, "Q1").question_text == "Is X first-line?"
+    conn.close()
+
+
+def test_import_is_atomic_on_invalid_row(tmp_path):
+    conn = _conn(tmp_path)
+    bad = (
+        "question_id,question_text,persona,domain,therapeutic_area,brand_focus\n"
+        "Q1,ok,Provider,Safety,,\n"
+        "Q2,bad,NotAPersona,Safety,,\n"
+        "Q3,ok,Provider,Safety,,\n"
+    )
+    path = tmp_path / "bad.csv"
+    path.write_text(bad)
+    with pytest.raises(Exception):
+        import_questions_csv(conn, str(path), now=NOW)
+    # atomic: the valid first row must NOT have been committed
+    assert get_current(conn, "Q1") is None
     conn.close()

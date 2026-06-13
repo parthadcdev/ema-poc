@@ -70,3 +70,14 @@ def test_deactivate_sets_active_false(tmp_path):
     deactivate_question(conn, "Q1", now=LATER)
     assert get_current(conn, "Q1").active is False
     conn.close()
+
+
+def test_text_edit_preserves_approval_status(tmp_path):
+    conn = _conn(tmp_path)
+    add_question(conn, question_id="Q1", question_text="v1", persona="Provider",
+                 domain="General", now=NOW)
+    approve_question(conn, "Q1", approver_name="R", now=LATER)
+    # editing only the text keeps APPROVED (documented carry-forward behavior)
+    update_question(conn, "Q1", question_text="v2", now=LATER)
+    assert get_current(conn, "Q1").approval_status is ApprovalStatus.APPROVED
+    conn.close()
