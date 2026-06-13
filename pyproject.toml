@@ -7,6 +7,9 @@ dependencies = [
     "pydantic>=2",
     "pyyaml",
     "openpyxl",
+    "anthropic",
+    "openai",
+    "google-generativeai",
 ]
 
 [project.optional-dependencies]
