@@ -96,6 +96,7 @@ class Response(BaseModel):
     competitive_position: CompetitivePosition | None = None
     alert_triggered: bool = False
     created_at: datetime | None = None
+    provenance: str | None = None
 
 
 class Score(BaseModel):
@@ -107,6 +108,8 @@ class Score(BaseModel):
     brand_mentions: list[str] = Field(default_factory=list)
     key_claims: list[str] = Field(default_factory=list)
     scoring_rationale: str | None = None
+    confidence_level: str | None = None
+    citation_quality: str | None = None
     scoring_model: str
     human_override: bool = False
     override_rationale: str | None = None

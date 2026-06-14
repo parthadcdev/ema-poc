@@ -72,4 +72,5 @@ class ClaudeTargetAdapter(LLMAdapter):
             completion_tokens=getattr(resp.usage, "output_tokens", None),
             raw={"stop_reason": stop, "model": self.model_version},
             citations=citations,
+            actual_model=getattr(resp, "model", None),
         )

@@ -71,3 +71,26 @@ def test_run_and_alert_construct():
     assert run.status == "RUNNING"
     alert = Alert(alert_id="a-1", score_id="s-1", reason="sentiment < -0.3")
     assert alert.reason
+
+
+def test_score_accepts_new_optional_dimensions():
+    """Score must accept confidence_level and citation_quality as optional str."""
+    s = Score(
+        score_id="s1", response_id="r1",
+        sentiment_score=0.5, competitive_position=CompetitivePosition.AMONG_OPTIONS,
+        scoring_model="claude-opus-4-8",
+        confidence_level="ASSERTIVE", citation_quality="HIGH",
+    )
+    assert s.confidence_level == "ASSERTIVE"
+    assert s.citation_quality == "HIGH"
+
+
+def test_score_new_fields_default_to_none():
+    """Existing Score construction without new fields must still work."""
+    s = Score(
+        score_id="s1", response_id="r1",
+        sentiment_score=0.5, competitive_position=CompetitivePosition.AMONG_OPTIONS,
+        scoring_model="claude-opus-4-8",
+    )
+    assert s.confidence_level is None
+    assert s.citation_quality is None

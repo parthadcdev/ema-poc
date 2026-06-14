@@ -45,6 +45,7 @@ class OpenAIAdapter(LLMAdapter):
             prompt_tokens=getattr(resp.usage, "prompt_tokens", None),
             completion_tokens=getattr(resp.usage, "completion_tokens", None),
             raw={"finish_reason": finish, "model": self.model_version},
+            actual_model=getattr(resp, "model", None),
         )
 
     def _query_grounded(self, system_prompt: str, question_text: str) -> LLMResponse:
@@ -67,6 +68,7 @@ class OpenAIAdapter(LLMAdapter):
             raw={"model": self.model_version, "grounded": True,
                  "status": getattr(resp, "status", None)},
             citations=citations,
+            actual_model=getattr(resp, "model", None),
         )
 
 

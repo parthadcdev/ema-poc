@@ -70,6 +70,8 @@ def score_pending(
             brand_mentions=result.brand_mentions,
             key_claims=result.key_claims,
             scoring_rationale=result.scoring_rationale,
+            confidence_level=result.confidence_level,
+            citation_quality=result.citation_quality,
             scoring_model=model,
             created_at=now_factory(),
         )

@@ -16,10 +16,11 @@ class _Usage:
 
 
 class _Message:
-    def __init__(self, content, stop_reason, i=12, o=8):
+    def __init__(self, content, stop_reason, i=12, o=8, model=None):
         self.content = content
         self.stop_reason = stop_reason
         self.usage = _Usage(i, o)
+        self.model = model
 
 
 class _FakeAnthropic:
@@ -49,6 +50,7 @@ def test_success_joins_text_blocks_and_maps_tokens():
     msg = _Message(
         [_Block("thinking", "..."), _Block("text", "First-line "), _Block("text", "use.")],
         "end_turn",
+        model="claude-opus-4-8-20251101",
     )
     r = _adapter(msg).query("You are a patient.", "Is drug X first-line?")
     assert r.status == "SUCCESS"
@@ -56,6 +58,7 @@ def test_success_joins_text_blocks_and_maps_tokens():
     assert r.text == "First-line use."  # only text blocks, thinking excluded
     assert r.prompt_tokens == 12
     assert r.completion_tokens == 8
+    assert r.actual_model == "claude-opus-4-8-20251101"
 
 
 def test_request_uses_adaptive_thinking_and_no_temperature():

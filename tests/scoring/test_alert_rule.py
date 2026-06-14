@@ -9,6 +9,7 @@ def _score(sentiment=0.5, position="AMONG_OPTIONS", mentions=None):
     return ScoreResult(
         sentiment_score=sentiment, competitive_position=position,
         brand_mentions=mentions or [], key_claims=[], scoring_rationale="r",
+        confidence_level="MIXED", citation_quality="MODERATE",
     )
 
 

@@ -10,6 +10,7 @@ import argparse
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
+from ema_poc.coverage import format_coverage_report
 from ema_poc.reporting import format_health_report, format_run_report
 
 
@@ -30,6 +31,7 @@ class Deps:
     out: Callable
     build_dashboard: Callable | None = None
     serve_app: Callable | None = None
+    coverage: Callable | None = None
 
 
 def _make_scoring_client(env):
@@ -50,6 +52,7 @@ def default_deps() -> Deps:
         import_questions_csv,
         import_questions_excel,
     )
+    from ema_poc.coverage import question_effectiveness
     from ema_poc.dashboard.build import build_dashboard
     from ema_poc.scoring.pipeline import score_pending
 
@@ -73,6 +76,7 @@ def default_deps() -> Deps:
         out=print,
         build_dashboard=build_dashboard,
         serve_app=_serve_app,
+        coverage=question_effectiveness,
     )
 
 
@@ -103,6 +107,10 @@ def _parse_args(argv):
     p_serve = sub.add_parser("serve", help="Launch the real-time playground web UI")
     p_serve.add_argument("--host", default="127.0.0.1")
     p_serve.add_argument("--port", type=int, default=8000)
+
+    p_cov = sub.add_parser("coverage", help="Flag low-value questions (chronic NOT_MENTIONED)")
+    p_cov.add_argument("--min-responses", type=int, default=3)
+    p_cov.add_argument("--not-mentioned-threshold", type=float, default=0.8)
 
     return parser.parse_args(argv)
 
@@ -175,6 +183,16 @@ def main(argv=None, deps: Deps | None = None) -> int:
         app = create_app(web_deps)
         deps.out(f"Playground on http://{args.host}:{args.port} (Ctrl-C to stop)")
         deps.serve_app(app, host=args.host, port=args.port)
+        return 0
+
+    if args.command == "coverage":
+        conn = _open_db(deps, config)
+        items = deps.coverage(
+            conn,
+            min_responses=args.min_responses,
+            not_mentioned_threshold=args.not_mentioned_threshold,
+        )
+        deps.out(format_coverage_report(items))
         return 0
 
     # run

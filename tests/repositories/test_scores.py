@@ -88,3 +88,34 @@ def test_update_response_scoring_sets_derived_columns_only(tmp_path):
     assert row["alert_triggered"] == 1
     assert row["response_text"] == "ans"  # content untouched
     conn.close()
+
+
+def test_save_and_latest_score_roundtrips_new_dimensions(tmp_path):
+    """confidence_level and citation_quality must survive a save/read roundtrip."""
+    conn = _conn(tmp_path)
+    _resp(conn, "resp-x")
+    score = Score(
+        score_id="resp-x-s1", response_id="resp-x", version=1,
+        sentiment_score=0.7, competitive_position="FIRST_LINE_RECOMMENDED",
+        brand_mentions=["Skyrizi"], key_claims=["effective"],
+        scoring_rationale="good", scoring_model="claude-opus-4-8",
+        confidence_level="ASSERTIVE", citation_quality="HIGH",
+        created_at=NOW,
+    )
+    save_score(conn, score)
+    got = latest_score(conn, "resp-x")
+    assert got.confidence_level == "ASSERTIVE"
+    assert got.citation_quality == "HIGH"
+    conn.close()
+
+
+def test_save_score_with_null_new_dimensions(tmp_path):
+    """Scores without confidence/citation (old rows) must read back as None."""
+    conn = _conn(tmp_path)
+    _resp(conn, "resp-y")
+    score = _score("resp-y")  # uses existing helper which omits new fields
+    save_score(conn, score)
+    got = latest_score(conn, "resp-y")
+    assert got.confidence_level is None
+    assert got.citation_quality is None
+    conn.close()

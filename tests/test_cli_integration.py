@@ -45,6 +45,7 @@ def _fake_scorer(client, *, response_text, **kw):
     return ScoreResult(
         sentiment_score=0.6, competitive_position="FIRST_LINE_RECOMMENDED",
         brand_mentions=["Skyrizi"], key_claims=["effective"], scoring_rationale="r",
+        confidence_level="ASSERTIVE", citation_quality="NONE",
     )
 
 

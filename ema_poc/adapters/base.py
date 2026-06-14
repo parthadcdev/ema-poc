@@ -31,6 +31,7 @@ class LLMResponse:
     completion_tokens: int | None = None
     raw: dict = field(default_factory=dict)
     citations: list[Citation] = field(default_factory=list)
+    actual_model: str | None = None
 
 
 class LLMAdapter(ABC):

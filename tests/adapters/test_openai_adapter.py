@@ -19,9 +19,10 @@ class _Usage:
 
 
 class _Completion:
-    def __init__(self, content, finish_reason, p=10, c=20):
+    def __init__(self, content, finish_reason, p=10, c=20, model=None):
         self.choices = [_Choice(content, finish_reason)]
         self.usage = _Usage(p, c)
+        self.model = model
 
 
 class _FakeOpenAI:
@@ -48,13 +49,14 @@ def _adapter(completion):
 
 
 def test_success_response():
-    adapter = _adapter(_Completion("Drug X is first-line.", "stop"))
+    adapter = _adapter(_Completion("Drug X is first-line.", "stop", model="gpt-4o-2024-11-20"))
     r = adapter.query("You are a clinician.", "Is drug X first-line?")
     assert r.status == "SUCCESS"
     assert r.finish_reason == "stop"
     assert r.text == "Drug X is first-line."
     assert r.prompt_tokens == 10
     assert r.completion_tokens == 20
+    assert r.actual_model == "gpt-4o-2024-11-20"
 
 
 def test_request_shape_includes_system_and_user_and_params():
@@ -131,6 +133,7 @@ def _grounded_resp():
         output=[message],
         output_text="Grounded answer.",
         usage=SimpleNamespace(input_tokens=10, output_tokens=5),
+        model="gpt-4o-2024-11-20",
     )
 
 
@@ -145,3 +148,4 @@ def test_openai_grounded_enables_web_search_and_parses_citations():
     assert out.status == "SUCCESS"
     assert out.text == "Grounded answer."
     assert [(c.title, c.url) for c in out.citations] == [("Source A", "https://src/a")]
+    assert out.actual_model == "gpt-4o-2024-11-20"

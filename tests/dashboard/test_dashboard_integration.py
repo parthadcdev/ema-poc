@@ -37,6 +37,7 @@ def _scorer(client, *, response_text, **kw):
     return ScoreResult(
         sentiment_score=-0.6, competitive_position="NOT_RECOMMENDED",
         brand_mentions=["Skyrizi"], key_claims=["avoid"], scoring_rationale="negative tone",
+        confidence_level="HEDGED", citation_quality="LOW",
     )
 
 
