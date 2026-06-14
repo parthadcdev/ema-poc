@@ -114,6 +114,8 @@ def _parse_args(argv):
     p_run.add_argument("--domain")
     p_run.add_argument("--run-id", dest="run_id", default=None,
                        help="Resume an existing run by id (re-dispatches only uncaptured work)")
+    p_run.add_argument("--backfill-for", dest="backfill_for", default=None,
+                       help="Tag this run as a backfill for a missed date (YYYY-MM-DD)")
     p_run.add_argument("--score", action="store_true", help="Score responses after the run")
 
     sub.add_parser("dry-run", help="Validate config + target connectivity (no writes)")
@@ -263,6 +265,15 @@ def main(argv=None, deps: Deps | None = None) -> int:
         return 0
 
     # run
+    if args.backfill_for is not None:
+        import datetime as _dt
+        try:
+            _dt.date.fromisoformat(args.backfill_for)
+        except ValueError:
+            from ema_poc.config import ConfigError
+            raise ConfigError(
+                f"Invalid --backfill-for date: {args.backfill_for!r} (expected YYYY-MM-DD)"
+            )
     conn = _open_db(deps, config)
     adapters = deps.build_adapters(config, deps.env)
     summary = deps.run(
@@ -270,6 +281,7 @@ def main(argv=None, deps: Deps | None = None) -> int:
         run_id=args.run_id,
         persona=args.persona, therapeutic_area=args.therapeutic_area,
         brand_focus=args.brand_focus, domain=args.domain,
+        backfill_for=args.backfill_for,
     )
     scoring = None
     if args.score:

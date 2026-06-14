@@ -1,5 +1,8 @@
+import pytest
+
 from ema_poc.agent.runner import RunSummary
 from ema_poc.cli import Deps, main
+from ema_poc.config import ConfigError
 from ema_poc.connectivity import TargetStatus
 from ema_poc.scoring.pipeline import ScoringSummary
 
@@ -444,3 +447,41 @@ def test_consensus_no_credentials_required():
     rc = main(["consensus"], deps=deps)
     assert rc == 0
     assert validated["called"] is False
+
+
+# ---------------------------------------------------------------------------
+# --backfill-for tests
+# ---------------------------------------------------------------------------
+
+def test_run_passes_backfill_for():
+    """--backfill-for is forwarded to deps.run as backfill_for kwarg."""
+    deps, out, calls = _fake_deps()
+    rc = main(["run", "--backfill-for", "2026-06-10"], deps=deps)
+    assert rc == 0
+    assert calls["run"] is not None
+    assert calls["run"]["backfill_for"] == "2026-06-10"
+
+
+def test_run_rejects_invalid_backfill_date():
+    """An unparseable --backfill-for string raises ConfigError before any LLM work."""
+    deps, out, calls = _fake_deps()
+    with pytest.raises(ConfigError):
+        main(["run", "--backfill-for", "not-a-date"], deps=deps)
+    assert calls["run"] is None  # deps.run must NOT have been called
+
+
+def test_run_rejects_out_of_range_backfill_date():
+    """An out-of-range date like 2026-13-40 raises ConfigError before any LLM work."""
+    deps, out, calls = _fake_deps()
+    with pytest.raises(ConfigError):
+        main(["run", "--backfill-for", "2026-13-40"], deps=deps)
+    assert calls["run"] is None  # deps.run must NOT have been called
+
+
+def test_run_without_backfill_for_passes_none():
+    """Without --backfill-for, backfill_for kwarg is None."""
+    deps, out, calls = _fake_deps()
+    rc = main(["run"], deps=deps)
+    assert rc == 0
+    assert calls["run"] is not None
+    assert calls["run"]["backfill_for"] is None
