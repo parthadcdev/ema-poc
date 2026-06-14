@@ -80,9 +80,11 @@ def compute_consensus(
         counts = Counter(positions)
         top_count = max(counts.values())
         top = [p for p, c in counts.items() if c == top_count]
-        # Unique winner → canonical; tie → None
-        canonical = top[0] if len(top) == 1 else None
+        # Vote uses each sample's latest (override-aware) score via latest_score.
         agreement = top_count / len(positions)
+        # Canonical requires a UNIQUE top position AND a strict majority (> 0.5).
+        # A plurality winner that is not a strict majority yields canonical=None.
+        canonical = top[0] if (len(top) == 1 and agreement > 0.5) else None
         sentiment_mean = statistics.fmean(sentiments) if sentiments else None
         sentiment_stdev = (
             statistics.pstdev(sentiments)

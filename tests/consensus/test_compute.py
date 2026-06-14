@@ -341,3 +341,65 @@ def test_multiple_groups_independent(tmp_path):
     rows = list_consensus(conn)
     assert len(rows) == 2
     assert len(list_alerts(conn)) == 1
+
+
+# ── Test 9: 4-sample plurality at 0.5 → no canonical, VARIANCE alert ─────────
+
+
+def test_four_sample_plurality_no_strict_majority(tmp_path):
+    """4 samples: 2×AMONG_OPTIONS, 1×SECOND_LINE, 1×NOT_RECOMMENDED.
+    top_count=2, agreement=0.5. Not a strict majority (>0.5), so canonical
+    must be None and a VARIANCE alert must be raised (no-majority AND
+    favorable↔unfavorable span)."""
+    conn = _conn(tmp_path)
+    _seed_samples(
+        conn,
+        [
+            ("AMONG_OPTIONS", 0.7),
+            ("AMONG_OPTIONS", 0.6),
+            ("SECOND_LINE", 0.4),
+            ("NOT_RECOMMENDED", 0.1),
+        ],
+    )
+
+    result = _compute(conn)
+    assert result.groups == 1
+    assert result.alerts_raised == 1
+
+    rows = list_consensus(conn)
+    assert len(rows) == 1
+    r = rows[0]
+    assert r.canonical_position is None  # plurality but not a strict majority
+    assert r.agreement == pytest.approx(0.5)
+    assert r.sample_count == 4
+
+    alerts = list_alerts(conn)
+    assert len(alerts) == 1
+    assert alerts[0].reason.startswith("VARIANCE")
+
+
+# ── Test 10: 3-sample 2-1 split still yields a canonical (agreement=0.667) ───
+
+
+def test_three_sample_two_one_split_yields_canonical(tmp_path):
+    """2/3 of FIRST_LINE_RECOMMENDED is a strict majority (0.667 > 0.5).
+    Canonical must be FIRST_LINE_RECOMMENDED. An alert is raised because the
+    positions span FAVORABLE and UNFAVORABLE sets."""
+    conn = _conn(tmp_path)
+    _seed_samples(
+        conn,
+        [
+            ("FIRST_LINE_RECOMMENDED", 0.9),
+            ("FIRST_LINE_RECOMMENDED", 0.8),
+            ("NOT_MENTIONED", 0.1),
+        ],
+    )
+
+    result = _compute(conn)
+    assert result.groups == 1
+
+    rows = list_consensus(conn)
+    assert len(rows) == 1
+    r = rows[0]
+    assert r.canonical_position == "FIRST_LINE_RECOMMENDED"
+    assert r.agreement == pytest.approx(2 / 3)
