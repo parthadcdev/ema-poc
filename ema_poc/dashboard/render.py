@@ -210,6 +210,39 @@ tr.detail td{background:#fffdf7;border-left:3px solid var(--accent)}
 }
 .placeholder p{font-family:var(--serif); font-size:1.05rem; font-style:italic; margin:0}
 
+/* ---- Share of Voice / Stacked bar tracks ---- */
+.sov-row{display:flex;align-items:center;gap:.7rem;margin:.45rem 0;font-size:12.5px}
+.sov-label{width:160px;flex-shrink:0;text-align:right;color:var(--ink-soft);font-family:var(--sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.sov-track{flex:1;height:18px;background:var(--rule-soft);border-radius:2px;overflow:hidden;display:flex;min-width:120px}
+.sov-abbvie{background:var(--accent);height:100%}
+.sov-comp{background:#d9a64b;height:100%}
+.sov-meta{width:130px;flex-shrink:0;font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);white-space:nowrap}
+
+/* ---- Positioning mix bars ---- */
+.pos-row{display:flex;align-items:center;gap:.7rem;margin:.45rem 0}
+.pos-label{width:160px;flex-shrink:0;text-align:right;color:var(--ink-soft);font-family:var(--sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.pos-track{flex:1;height:18px;border-radius:2px;overflow:hidden;display:flex;min-width:120px}
+.pos-meta{width:60px;flex-shrink:0;font-family:var(--mono);font-size:10.5px;color:var(--ink-faint)}
+.pos-legend{display:flex;flex-wrap:wrap;gap:.4rem .9rem;margin:.7rem 0 1rem}
+.pos-swatch{display:inline-flex;align-items:center;gap:.35rem;font-family:var(--mono);font-size:10px;color:var(--ink-soft)}
+.pos-swatch span{display:inline-block;width:12px;height:12px;border-radius:2px;flex-shrink:0}
+
+/* ---- Heatmap ---- */
+.heatmap-wrap{overflow-x:auto;margin:.5rem 0}
+.heatmap-tbl{border-collapse:collapse;font-size:12px}
+.heatmap-tbl th{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;padding:.35rem .55rem;background:var(--accent-deep);color:#f2efe6;white-space:nowrap}
+.heatmap-tbl td.row-head{font-family:var(--sans);font-size:12px;color:var(--ink-soft);padding:.35rem .55rem;white-space:nowrap;background:var(--surface-2);border:1px solid var(--rule-soft)}
+.heatmap-tbl td.cell{width:72px;height:36px;text-align:center;vertical-align:middle;font-family:var(--mono);font-size:11px;font-weight:600;border:1px solid rgba(0,0,0,.06)}
+.heatmap-tbl td.cell.empty{background:var(--surface-2);color:var(--ink-faint);font-weight:400}
+.hmscale{display:flex;align-items:center;gap:.5rem;margin:.6rem 0 .2rem;font-family:var(--mono);font-size:10px;color:var(--ink-faint)}
+.hmscale-bar{width:140px;height:10px;border-radius:2px;background:linear-gradient(to right,#9f3a2f,#a9791a,#2f7d5b);border:1px solid var(--rule)}
+
+/* ---- SVG trend ---- */
+.trend-svg-wrap{overflow-x:auto;margin:.5rem 0}
+.trend-legend{display:flex;flex-wrap:wrap;gap:.4rem .9rem;margin:.6rem 0 .4rem}
+.trend-swatch{display:inline-flex;align-items:center;gap:.35rem;font-family:var(--mono);font-size:10px;color:var(--ink-soft)}
+.trend-swatch span{display:inline-block;width:14px;height:3px;border-radius:1px;flex-shrink:0}
+
 footer{
   margin-top:auto; padding:1rem 1.6rem; border-top:1px solid var(--rule);
   font-family:var(--mono); font-size:10px; letter-spacing:.1em;
@@ -380,11 +413,296 @@ function renderOverview(rows){
 }
 
 /* ====================================================================
-   renderMarketing — stub (Task 3)
+   renderMarketing
    ==================================================================== */
 function renderMarketing(rows){
+
+  /* -- 1. Share of Voice (by therapeutic area) -- */
+  var sovMap = {}; /* ta -> {abbvie:N, comp:N} */
+  rows.forEach(function(r){
+    var ta = r.therapeutic_area || '(none)';
+    if(!sovMap[ta]) sovMap[ta] = {abbvie:0, comp:0};
+    (r.brand_mentions || []).forEach(function(m){
+      if(DATA.abbvie_brands.indexOf(m) >= 0)      sovMap[ta].abbvie++;
+      else if(DATA.competitor_brands.indexOf(m) >= 0) sovMap[ta].comp++;
+    });
+  });
+  var sovAreas = Object.keys(sovMap).sort(function(a,b){
+    var ta = sovMap[a].abbvie+sovMap[a].comp;
+    var tb = sovMap[b].abbvie+sovMap[b].comp;
+    return tb - ta;
+  });
+  var sovHtml;
+  var totalMentions = sovAreas.reduce(function(s,a){return s+sovMap[a].abbvie+sovMap[a].comp;},0);
+  if(totalMentions === 0){
+    sovHtml = "<p class='empty'>No brand mentions in current filter view.</p>";
+  } else {
+    sovHtml = sovAreas.map(function(ta){
+      var d = sovMap[ta];
+      var tot = d.abbvie + d.comp;
+      if(tot === 0) return '';
+      var abbviePct = Math.round(100*d.abbvie/tot);
+      var compPct   = 100 - abbviePct;
+      return "<div class='sov-row'>" +
+        "<div class='sov-label' title='"+esc(ta)+"'>"+esc(ta)+"</div>" +
+        "<div class='sov-track'>" +
+          "<div class='sov-abbvie' style='width:"+abbviePct+"%'></div>" +
+          "<div class='sov-comp'   style='width:"+compPct+"%'></div>" +
+        "</div>" +
+        "<div class='sov-meta'>AbbVie "+esc(abbviePct)+"% &middot; "+esc(tot)+" mentions</div>" +
+        "</div>";
+    }).join('');
+    sovHtml += "<div style='display:flex;gap:1.2rem;margin:.7rem 0 0;font-family:var(--mono);font-size:10px;color:var(--ink-faint)'>" +
+      "<span><span style='display:inline-block;width:12px;height:12px;background:var(--accent);border-radius:2px;vertical-align:middle;margin-right:.3rem'></span>AbbVie</span>" +
+      "<span><span style='display:inline-block;width:12px;height:12px;background:#d9a64b;border-radius:2px;vertical-align:middle;margin-right:.3rem'></span>Competitor</span>" +
+      "</div>";
+  }
+
+  /* -- 2. Competitive Positioning Mix (by AbbVie brand) -- */
+  var POSITIONS = ['FIRST_LINE_RECOMMENDED','AMONG_OPTIONS','SECOND_LINE','NOT_RECOMMENDED','NOT_MENTIONED'];
+  var POS_COLORS = {
+    FIRST_LINE_RECOMMENDED: '#2f7d5b',
+    AMONG_OPTIONS:          '#5ba4a0',
+    SECOND_LINE:            '#c9922a',
+    NOT_RECOMMENDED:        '#9f3a2f',
+    NOT_MENTIONED:          '#c0b8a8'
+  };
+  var POS_LABELS = {
+    FIRST_LINE_RECOMMENDED: '1st Line',
+    AMONG_OPTIONS:          'Among Options',
+    SECOND_LINE:            '2nd Line',
+    NOT_RECOMMENDED:        'Not Recommended',
+    NOT_MENTIONED:          'Not Mentioned'
+  };
+
+  var posMap = {}; /* brand -> {pos->count, total} */
+  rows.forEach(function(r){
+    if(!r.competitive_position) return;
+    var brand = r.brand_focus;
+    if(!brand) return;
+    if(!posMap[brand]) { posMap[brand] = {total:0}; POSITIONS.forEach(function(p){ posMap[brand][p]=0; }); }
+    if(posMap[brand][r.competitive_position] !== undefined) posMap[brand][r.competitive_position]++;
+    posMap[brand].total++;
+  });
+  var posKeys = Object.keys(posMap).filter(function(b){
+    return DATA.abbvie_brands.length === 0 || DATA.abbvie_brands.indexOf(b) >= 0;
+  }).sort();
+  /* If no abbvie brands configured, show all brands */
+  if(posKeys.length === 0) posKeys = Object.keys(posMap).sort();
+
+  var posLegend = "<div class='pos-legend'>" +
+    POSITIONS.map(function(p){
+      return "<span class='pos-swatch'><span style='background:"+POS_COLORS[p]+"'></span>"+esc(POS_LABELS[p])+"</span>";
+    }).join('') +
+    "</div>";
+
+  var posHtml;
+  if(posKeys.length === 0){
+    posHtml = "<p class='empty'>No competitive position data in current filter view.</p>";
+  } else {
+    posHtml = posLegend + posKeys.map(function(brand){
+      var d = posMap[brand] || {};
+      var tot = d.total || 0;
+      if(tot === 0) return '';
+      var segments = POSITIONS.map(function(p){
+        var cnt = d[p] || 0;
+        var pct = Math.round(100*cnt/tot);
+        return cnt > 0
+          ? "<div style='width:"+pct+"%;height:100%;background:"+POS_COLORS[p]+";flex-shrink:0' title='"+esc(POS_LABELS[p])+": "+esc(cnt)+"'></div>"
+          : '';
+      }).join('');
+      return "<div class='pos-row'>" +
+        "<div class='pos-label' title='"+esc(brand)+"'>"+esc(brand)+"</div>" +
+        "<div class='pos-track'>"+segments+"</div>" +
+        "<div class='pos-meta'>n="+esc(tot)+"</div>" +
+        "</div>";
+    }).join('');
+    if(!posHtml.trim()){
+      posHtml = "<p class='empty'>No competitive position data in current filter view.</p>";
+    }
+  }
+
+  /* -- 3. Therapy x Model favorability heatmap -- */
+  var heatBrands = [];
+  var heatModels = [];
+  var heatData   = {}; /* brand|model -> [scores] */
+  rows.forEach(function(r){
+    if(r.sentiment_score == null || typeof r.sentiment_score !== 'number') return;
+    var brand = r.brand_focus; var model = r.llm_name;
+    if(!brand || !model) return;
+    if(heatBrands.indexOf(brand) < 0) heatBrands.push(brand);
+    if(heatModels.indexOf(model) < 0) heatModels.push(model);
+    var key = brand+'|'+model;
+    if(!heatData[key]) heatData[key] = [];
+    heatData[key].push(r.sentiment_score);
+  });
+  heatBrands.sort(); heatModels.sort();
+
+  function sentColor(v){
+    /* v in [-1,1]; negative->oxblood, 0->amber, positive->green */
+    if(v < 0){
+      var t = Math.min(1, -v);
+      /* amber(169,121,26) -> oxblood(159,58,47) */
+      var r2 = Math.round(169 + t*(159-169));
+      var g2 = Math.round(121 + t*(58-121));
+      var b2 = Math.round(26  + t*(47-26));
+      return 'rgb('+r2+','+g2+','+b2+')';
+    } else {
+      var t2 = Math.min(1, v);
+      /* amber(169,121,26) -> green(47,125,91) */
+      var r3 = Math.round(169 + t2*(47-169));
+      var g3 = Math.round(121 + t2*(125-121));
+      var b3 = Math.round(26  + t2*(91-26));
+      return 'rgb('+r3+','+g3+','+b3+')';
+    }
+  }
+  function textOnBg(v){
+    /* dark text on light amber, light text on deep colors */
+    return (v > -0.3 && v < 0.3) ? '#5a3c00' : '#f2efe6';
+  }
+
+  var heatHtml;
+  if(heatBrands.length === 0 || heatModels.length === 0){
+    heatHtml = "<p class='empty'>No scored records in current filter view.</p>";
+  } else {
+    var headerCells = heatModels.map(function(m){ return "<th>"+esc(m)+"</th>"; }).join('');
+    var rows2 = heatBrands.map(function(brand){
+      var cells = heatModels.map(function(model){
+        var key = brand+'|'+model;
+        var scores = heatData[key];
+        if(!scores || scores.length === 0){
+          return "<td class='cell empty'>&mdash;</td>";
+        }
+        var avg = scores.reduce(function(s,x){return s+x;},0)/scores.length;
+        var bg  = sentColor(avg);
+        var col = textOnBg(avg);
+        return "<td class='cell' style='background:"+bg+";color:"+col+"'>"+avg.toFixed(2)+"</td>";
+      }).join('');
+      return "<tr><td class='row-head'>"+esc(brand)+"</td>"+cells+"</tr>";
+    }).join('');
+
+    var hmScale = "<div class='hmscale'>" +
+      "<span>&minus;1</span><div class='hmscale-bar'></div><span>+1</span>" +
+      "<span style='margin-left:.4rem;color:var(--ink-faint)'>(avg sentiment)</span></div>";
+
+    heatHtml = "<div class='heatmap-wrap'>" +
+      "<table class='heatmap-tbl'>" +
+      "<thead><tr><th>Brand / Model</th>"+headerCells+"</tr></thead>" +
+      "<tbody>"+rows2+"</tbody>" +
+      "</table></div>" + hmScale;
+  }
+
+  /* -- 4. Sentiment trend over time (inline SVG) -- */
+  /* Collect per-brand-per-date avg sentiment */
+  var trendBrands = [];
+  var trendDates  = [];
+  var trendMap    = {}; /* brand|date -> [scores] */
+  rows.forEach(function(r){
+    if(r.sentiment_score == null || typeof r.sentiment_score !== 'number') return;
+    var brand = r.brand_focus; var date = r.date;
+    if(!brand || !date) return;
+    if(trendBrands.indexOf(brand) < 0) trendBrands.push(brand);
+    if(trendDates.indexOf(date)   < 0) trendDates.push(date);
+    var key = brand+'|'+date;
+    if(!trendMap[key]) trendMap[key] = [];
+    trendMap[key].push(r.sentiment_score);
+  });
+  trendBrands.sort(); trendDates.sort();
+
+  var TREND_COLORS = ['#1f5c4d','#c9922a','#4a7db5','#9f3a2f','#6a5acd','#2f7d5b','#d9a64b'];
+
+  var trendHtml;
+  if(trendDates.length < 2){
+    trendHtml = "<p class='empty'>Trend requires at least 2 distinct dates with scored records; not enough data in current filter view.</p>";
+  } else {
+    var W = 720, H = 240;
+    var padL = 48, padR = 24, padT = 18, padB = 48;
+    var plotW = W - padL - padR;
+    var plotH = H - padT - padB;
+    var nDates  = trendDates.length;
+    var xStep   = nDates > 1 ? plotW / (nDates - 1) : plotW;
+
+    function xOf(i){ return padL + i * xStep; }
+    function yOf(v){ /* v in [-1,1] -> pixel */ return padT + plotH * (1 - (v + 1) / 2); }
+
+    /* Gridlines & axes */
+    var svgParts = [];
+    svgParts.push('<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" style="font-family:monospace;overflow:visible">');
+
+    /* y-axis ticks at -1, 0, 1 */
+    [-1, 0, 1].forEach(function(v){
+      var y = yOf(v);
+      var col = v === 0 ? '#c9922a' : '#ddd5c4';
+      var dash = v === 0 ? '' : ' stroke-dasharray="4 3"';
+      svgParts.push('<line x1="'+padL+'" y1="'+y+'" x2="'+(padL+plotW)+'" y2="'+y+'" stroke="'+col+'" stroke-width="'+(v===0?1.5:1)+'"'+dash+'/>');
+      svgParts.push('<text x="'+(padL-6)+'" y="'+y+'" text-anchor="end" dominant-baseline="middle" font-size="10" fill="#8c8a7e">'+(v>=0?'+':'')+v+'</text>');
+    });
+
+    /* x-axis date labels: show first, last, and up to 3 middle ones */
+    var labelIdxSet = [0, nDates-1];
+    if(nDates > 2){
+      var mid = Math.floor(nDates/2);
+      labelIdxSet.push(mid);
+      if(nDates > 4){ labelIdxSet.push(Math.floor(nDates/4)); labelIdxSet.push(Math.floor(3*nDates/4)); }
+    }
+    var labelIdxUniq = labelIdxSet.filter(function(x,i,a){ return a.indexOf(x)===i; }).sort(function(a,b){return a-b;});
+    labelIdxUniq.forEach(function(i){
+      var x = xOf(i);
+      var d = trendDates[i];
+      var label = d.length >= 10 ? d.slice(5) : d; /* MM-DD */
+      svgParts.push('<line x1="'+x+'" y1="'+(padT+plotH)+'" x2="'+x+'" y2="'+(padT+plotH+4)+'" stroke="#c0b8a8" stroke-width="1"/>');
+      svgParts.push('<text x="'+x+'" y="'+(padT+plotH+14)+'" text-anchor="middle" font-size="9" fill="#8c8a7e">'+esc(label)+'</text>');
+    });
+
+    /* Polylines per brand */
+    trendBrands.forEach(function(brand, bi){
+      var color = TREND_COLORS[bi % TREND_COLORS.length];
+      var points = trendDates.map(function(date, di){
+        var key = brand+'|'+date;
+        var sc  = trendMap[key];
+        if(!sc || sc.length === 0) return null;
+        var avg = sc.reduce(function(s,x){return s+x;},0)/sc.length;
+        return xOf(di)+','+yOf(avg);
+      }).filter(function(p){ return p !== null; });
+      if(points.length >= 1){
+        svgParts.push('<polyline points="'+points.join(' ')+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>');
+        /* dots */
+        points.forEach(function(pt){
+          var xy = pt.split(',');
+          svgParts.push('<circle cx="'+xy[0]+'" cy="'+xy[1]+'" r="3" fill="'+color+'" stroke="#fbf9f4" stroke-width="1.5"/>');
+        });
+      }
+    });
+
+    svgParts.push('</svg>');
+    var svgEl = svgParts.join('');
+
+    var legendItems = trendBrands.map(function(brand, bi){
+      var color = TREND_COLORS[bi % TREND_COLORS.length];
+      return "<span class='trend-swatch'><span style='background:"+color+"'></span>"+esc(brand)+"</span>";
+    }).join('');
+
+    trendHtml = "<div class='trend-legend'>"+legendItems+"</div>" +
+      "<div class='trend-svg-wrap'>"+svgEl+"</div>";
+  }
+
+  /* -- Assemble -- */
   document.getElementById('view-marketing').innerHTML =
-    "<div class='placeholder'><p>Marketing Analytics &mdash; coming soon.</p></div>";
+    "<div class='card'><h2>Share of Voice</h2>" +
+    "<p class='hint'>Brand mentions per therapeutic area — AbbVie vs. competitor.</p>" +
+    sovHtml + "</div>" +
+
+    "<div class='card'><h2>Competitive Positioning Mix</h2>" +
+    "<p class='hint'>Distribution of competitive position by AbbVie brand (scored records only).</p>" +
+    posHtml + "</div>" +
+
+    "<div class='card'><h2>Therapy &times; Model Favorability</h2>" +
+    "<p class='hint'>Average sentiment score per brand / LLM pair. Cells with no data are muted.</p>" +
+    heatHtml + "</div>" +
+
+    "<div class='card'><h2>Sentiment Trend Over Time</h2>" +
+    "<p class='hint'>Average sentiment per brand across dates (scored records). Requires ≥ 2 distinct dates.</p>" +
+    trendHtml + "</div>";
 }
 
 /* ====================================================================
