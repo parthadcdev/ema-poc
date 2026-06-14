@@ -348,3 +348,62 @@ def test_drift_validates_credentials():
     )
     main(["drift"], deps=deps)
     assert validated["called"] is True
+
+
+# ---------------------------------------------------------------------------
+# check-hallucinations command tests
+# ---------------------------------------------------------------------------
+
+def test_check_hallucinations_runs_and_prints_summary():
+    """check-hallucinations calls load_reference_corpus, make_scoring_client,
+    check_hallucinations, and prints checked/alerts counts."""
+    from types import SimpleNamespace
+
+    SENTINEL_CORPUS = object()
+    captured = {}
+
+    def _fake_load_corpus(config_dir):
+        captured["config_dir"] = config_dir
+        return SENTINEL_CORPUS
+
+    def _fake_client(env):
+        captured["client"] = "FAKE_CLIENT"
+        return "FAKE_CLIENT"
+
+    def _fake_check(conn, *, client, config, corpus, **kw):
+        captured["corpus"] = corpus
+        captured["client_passed"] = client
+        return SimpleNamespace(checked=4, alerts_raised=1)
+
+    deps, out, calls = _fake_deps(
+        load_reference_corpus=_fake_load_corpus,
+        make_scoring_client=_fake_client,
+        check_hallucinations=_fake_check,
+    )
+    rc = main(["check-hallucinations"], deps=deps)
+
+    assert rc == 0
+    full_output = "\n".join(out)
+    assert "4" in full_output
+    assert "1" in full_output
+    assert captured["corpus"] is SENTINEL_CORPUS
+    assert captured["client_passed"] == "FAKE_CLIENT"
+
+
+def test_check_hallucinations_validates_credentials():
+    """check-hallucinations is in the credential-validation tuple."""
+    from types import SimpleNamespace
+
+    validated = {"called": False}
+
+    def _validate(config, env):
+        validated["called"] = True
+
+    deps, out, _ = _fake_deps(
+        validate_credentials=_validate,
+        load_reference_corpus=lambda cd: object(),
+        make_scoring_client=lambda env: object(),
+        check_hallucinations=lambda conn, **k: SimpleNamespace(checked=0, alerts_raised=0),
+    )
+    main(["check-hallucinations"], deps=deps)
+    assert validated["called"] is True

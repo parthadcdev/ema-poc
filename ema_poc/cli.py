@@ -35,6 +35,8 @@ class Deps:
     freeze_baseline: Callable | None = None
     detect_drift: Callable | None = None
     make_embedding_client: Callable | None = None
+    check_hallucinations: Callable | None = None
+    load_reference_corpus: Callable | None = None
 
 
 def _make_scoring_client(env):
@@ -61,6 +63,8 @@ def default_deps() -> Deps:
     from ema_poc.drift.baseline import freeze_baseline
     from ema_poc.drift.detector import detect_drift
     from ema_poc.drift.embeddings import default_embedding_client
+    from ema_poc.hallucination.pipeline import check_pending
+    from ema_poc.hallucination.corpus import load_reference_corpus
 
     def _serve_app(app, *, host, port):
         import uvicorn
@@ -90,6 +94,8 @@ def default_deps() -> Deps:
         freeze_baseline=freeze_baseline,
         detect_drift=detect_drift,
         make_embedding_client=_make_embedding_client,
+        check_hallucinations=check_pending,
+        load_reference_corpus=load_reference_corpus,
     )
 
 
@@ -130,6 +136,8 @@ def _parse_args(argv):
 
     sub.add_parser("drift", help="Detect semantic drift vs the frozen baseline and raise alerts")
 
+    sub.add_parser("check-hallucinations", help="Flag responses that contradict the reference corpus")
+
     return parser.parse_args(argv)
 
 
@@ -144,7 +152,7 @@ def main(argv=None, deps: Deps | None = None) -> int:
     args = _parse_args(argv)
     config = deps.load_config(args.config_dir)
 
-    if args.command in ("run", "dry-run", "score", "healthcheck", "serve", "drift"):
+    if args.command in ("run", "dry-run", "score", "healthcheck", "serve", "drift", "check-hallucinations"):
         deps.validate_credentials(config, deps.env)
 
     if args.command == "import-questions":
@@ -227,6 +235,14 @@ def main(argv=None, deps: Deps | None = None) -> int:
         summary = deps.detect_drift(conn, client=client, config=config,
                                     now=datetime.now(timezone.utc).isoformat())
         deps.out(f"Drift: compared {summary.compared}, drifted {summary.drifted}.")
+        return 0
+
+    if args.command == "check-hallucinations":
+        conn = _open_db(deps, config)
+        corpus = deps.load_reference_corpus(args.config_dir)
+        client = deps.make_scoring_client(deps.env)
+        summary = deps.check_hallucinations(conn, client=client, config=config, corpus=corpus)
+        deps.out(f"Checked {summary.checked}, alerts raised {summary.alerts_raised}.")
         return 0
 
     # run

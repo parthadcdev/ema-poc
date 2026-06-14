@@ -71,6 +71,24 @@ def test_drift_baselines_table_exists(tmp_path):
     conn.close()
 
 
+def test_hallucination_checks_table_exists(tmp_path):
+    """init_schema creates hallucination_checks with expected columns."""
+    conn = connect(str(tmp_path / "t.sqlite"))
+    init_schema(conn)
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(hallucination_checks)")}
+    assert cols == {"response_id", "risk_level", "rationale", "model", "created_at"}
+    conn.close()
+
+
+def test_hallucination_flags_table_exists(tmp_path):
+    """init_schema creates hallucination_flags with expected columns."""
+    conn = connect(str(tmp_path / "t.sqlite"))
+    init_schema(conn)
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(hallucination_flags)")}
+    assert cols == {"flag_id", "response_id", "claim", "conflicts_with", "severity", "created_at"}
+    conn.close()
+
+
 def test_init_schema_migrates_missing_columns(tmp_path):
     """init_schema must ALTER in additive columns missing from a pre-existing DB."""
     import sqlite3 as _sqlite3

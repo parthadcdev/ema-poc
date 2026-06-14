@@ -291,6 +291,15 @@ def get_response(conn: sqlite3.Connection, response_id: str) -> Response | None:
     return Response(**dict(row)) if row else None
 
 
+def success_responses(conn: sqlite3.Connection) -> list[Response]:
+    """All SUCCESS responses ordered by timestamp then id (stable, predictable)."""
+    rows = conn.execute(
+        "SELECT * FROM responses WHERE status = 'SUCCESS' "
+        "ORDER BY timestamp_utc ASC, response_id ASC"
+    ).fetchall()
+    return [Response(**dict(r)) for r in rows]
+
+
 def latest_scored_response(
     conn: sqlite3.Connection, question_id: str, llm_name: str
 ) -> Response | None:

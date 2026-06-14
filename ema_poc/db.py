@@ -167,6 +167,26 @@ CREATE TABLE IF NOT EXISTS drift_baselines (
     PRIMARY KEY (question_id, llm_name),
     FOREIGN KEY (response_id) REFERENCES responses(response_id)
 );
+
+CREATE TABLE IF NOT EXISTS hallucination_checks (
+    response_id  TEXT PRIMARY KEY,
+    risk_level   TEXT NOT NULL,
+    rationale    TEXT,
+    model        TEXT NOT NULL,
+    created_at   TEXT NOT NULL,
+    FOREIGN KEY (response_id) REFERENCES responses(response_id)
+);
+
+CREATE TABLE IF NOT EXISTS hallucination_flags (
+    flag_id        TEXT PRIMARY KEY,
+    response_id    TEXT NOT NULL,
+    claim          TEXT NOT NULL,
+    conflicts_with TEXT,
+    severity       TEXT NOT NULL,
+    created_at     TEXT NOT NULL,
+    FOREIGN KEY (response_id) REFERENCES responses(response_id)
+);
+CREATE INDEX IF NOT EXISTS idx_halluc_flags_response ON hallucination_flags(response_id);
 """
 
 
