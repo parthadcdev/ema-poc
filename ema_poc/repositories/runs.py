@@ -20,6 +20,11 @@ def get_run(conn: sqlite3.Connection, run_id: str) -> Run | None:
     return Run(**dict(row)) if row else None
 
 
+def list_runs(conn: sqlite3.Connection) -> list[Run]:
+    rows = conn.execute("SELECT * FROM runs ORDER BY started_at").fetchall()
+    return [Run(**dict(r)) for r in rows]
+
+
 def finish_run(
     conn: sqlite3.Connection,
     run_id: str,
