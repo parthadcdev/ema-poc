@@ -20,6 +20,11 @@ def format_run_report(
         f"  total tokens:        {summary.total_tokens}",
         f"  estimated cost:      ${summary.est_cost:.4f}",
     ]
+    if summary.budget_exceeded:
+        lines.append(
+            f"  budget exceeded:     stopped at {summary.total_tokens} / "
+            f"{summary.token_budget} tokens"
+        )
     if scoring is not None:
         lines += [
             f"  scored:              {scoring.scored}",
