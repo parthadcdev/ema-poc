@@ -92,4 +92,5 @@ class GeminiAdapter(LLMAdapter):
             completion_tokens=ctok,
             raw={"finish_reason": finish_name, "model": self.model_version},
             citations=citations,
+            actual_model=getattr(resp, "model_version", None),
         )

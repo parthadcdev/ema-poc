@@ -153,6 +153,14 @@ def run(
                     llm_target=adapter.name,
                     detail=llm_resp.status,
                 )
+                if llm_resp.actual_model and llm_resp.actual_model != adapter.model_version:
+                    record_event(
+                        conn,
+                        event_type="MODEL_DRIFT",
+                        role="TARGET",
+                        llm_target=adapter.name,
+                        detail=f"configured={adapter.model_version} actual={llm_resp.actual_model}",
+                    )
                 responses_captured += 1
                 by_status[llm_resp.status] += 1
                 if llm_resp.status == "FAILED":

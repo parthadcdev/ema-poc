@@ -5,6 +5,7 @@ import pytest
 
 from ema_poc.adapters.base import LLMResponse
 from ema_poc.agent.runner import run
+from ema_poc.audit import list_events
 from ema_poc.config import (
     AppConfig,
     BrandConfig,
@@ -226,4 +227,67 @@ def test_run_saves_provenance_on_each_response(tmp_path):
     expected_sha = hashlib.sha256(expected_prompt.encode("utf-8")).hexdigest()
     assert prov["system_prompt_sha256"] == expected_sha
 
+    conn.close()
+
+
+def test_model_drift_audit_event_recorded_when_actual_differs(tmp_path):
+    """When the API reports a different model than configured, a MODEL_DRIFT
+    audit event is written to the audit_log in the main thread."""
+    conn = _conn(tmp_path)
+    add_question(conn, question_id="Q1", question_text="a", persona="Provider",
+                 domain="Safety", now=NOW)
+    approve_question(conn, "Q1", approver_name="R", now=NOW)
+
+    # actual_model differs from model_version "m"
+    drift_resp = LLMResponse(
+        "answer", "stop", "SUCCESS", prompt_tokens=1, completion_tokens=1,
+        actual_model="gpt-4o-mini-2024-07-18",
+    )
+    adapter = _Adapter("GPT-4o", drift_resp)
+    cfg = _config(["GPT-4o"])
+
+    run(conn, [adapter], cfg, run_id="run-drift", id_factory=_ids(),
+        now_factory=lambda: NOW, rate_limiters={}, sleep=lambda d: None)
+
+    events = list_events(conn)
+    drift_events = [e for e in events if e["event_type"] == "MODEL_DRIFT"]
+    assert len(drift_events) == 1
+    assert drift_events[0]["llm_target"] == "GPT-4o"
+    assert drift_events[0]["detail"] == "configured=m actual=gpt-4o-mini-2024-07-18"
+    conn.close()
+
+
+def test_no_model_drift_event_when_actual_matches_or_is_none(tmp_path):
+    """No MODEL_DRIFT event when actual_model matches configured or is None."""
+    conn = _conn(tmp_path)
+    add_question(conn, question_id="Q1", question_text="a", persona="Provider",
+                 domain="Safety", now=NOW)
+    approve_question(conn, "Q1", approver_name="R", now=NOW)
+
+    # actual_model matches model_version "m" — no drift
+    matching_resp = LLMResponse(
+        "answer", "stop", "SUCCESS", prompt_tokens=1, completion_tokens=1,
+        actual_model="m",
+    )
+    adapter_match = _Adapter("GPT-4o", matching_resp)
+
+    add_question(conn, question_id="Q2", question_text="b", persona="Patient",
+                 domain="Efficacy", now=NOW)
+    approve_question(conn, "Q2", approver_name="R", now=NOW)
+
+    # actual_model is None — no drift check
+    none_resp = LLMResponse(
+        "answer2", "stop", "SUCCESS", prompt_tokens=1, completion_tokens=1,
+        actual_model=None,
+    )
+    adapter_none = _Adapter("Gemini", none_resp)
+
+    cfg = _config(["GPT-4o", "Gemini"])
+    run(conn, [adapter_match, adapter_none], cfg, run_id="run-no-drift",
+        id_factory=_ids(), now_factory=lambda: NOW, rate_limiters={},
+        sleep=lambda d: None)
+
+    events = list_events(conn)
+    drift_events = [e for e in events if e["event_type"] == "MODEL_DRIFT"]
+    assert drift_events == [], f"Expected no drift events, got: {drift_events}"
     conn.close()

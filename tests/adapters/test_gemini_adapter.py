@@ -27,11 +27,13 @@ class _Feedback:
 
 
 class _GeminiResp:
-    def __init__(self, text, finish_reason_name, block_reason_name=None, p=5, c=7):
+    def __init__(self, text, finish_reason_name, block_reason_name=None, p=5, c=7,
+                 model_version=None):
         self.text = text
         self.candidates = [_Candidate(finish_reason_name)]
         self.prompt_feedback = _Feedback(block_reason_name)
         self.usage_metadata = _Usage(p, c)
+        self.model_version = model_version
 
 
 class _FakeModel:
@@ -62,13 +64,15 @@ def _adapter(resp, capture=None):
 
 
 def test_success_response_and_tokens():
-    adapter = _adapter(_GeminiResp("Drug X is second-line.", "STOP"))
+    adapter = _adapter(_GeminiResp("Drug X is second-line.", "STOP",
+                                   model_version="gemini-1.5-pro-002"))
     r = adapter.query("clinical context", "Is drug X first-line?")
     assert r.status == "SUCCESS"
     assert r.finish_reason == "stop"
     assert r.text == "Drug X is second-line."
     assert r.prompt_tokens == 5
     assert r.completion_tokens == 7
+    assert r.actual_model == "gemini-1.5-pro-002"
 
 
 def test_factory_receives_system_prompt_and_config():
