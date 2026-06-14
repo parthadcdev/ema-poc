@@ -664,6 +664,34 @@ def test_approve_missing_id_errors(tmp_path):
     assert get_current(conn, "NOPE") is None
 
 
+def test_reject_missing_id_errors(tmp_path):
+    from ema_poc.repositories.questions import get_current
+
+    deps, conn, out = _real_deps(tmp_path)
+
+    with pytest.raises(ConfigError):
+        main(["reject", "NOPE"], deps=deps)
+
+    # nothing was written
+    assert get_current(conn, "NOPE") is None
+
+
+def test_reject_custom_approver(tmp_path):
+    from ema_poc.models import ApprovalStatus
+    from ema_poc.repositories.questions import add_question, get_current
+
+    deps, conn, out = _real_deps(tmp_path)
+    add_question(conn, question_id="Q1", question_text="Is it effective?",
+                 persona="Provider", domain="Efficacy")
+
+    rc = main(["reject", "Q1", "--approver", "Dr X"], deps=deps)
+    assert rc == 0
+
+    q = get_current(conn, "Q1")
+    assert q.approval_status is ApprovalStatus.REJECTED
+    assert q.approver_name == "Dr X"
+
+
 def test_list_questions_pending_source_filter(tmp_path):
     from ema_poc.models import ApprovalStatus
     from ema_poc.repositories.questions import add_question, approve_question
@@ -688,6 +716,7 @@ def test_list_questions_pending_source_filter(tmp_path):
     assert "GEN-1" in full_output
     assert "Q1" not in full_output
     assert "Q2" not in full_output
+    assert "1 question(s):" in full_output
 
 
 def test_list_questions_no_credentials_required(tmp_path):

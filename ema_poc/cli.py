@@ -334,7 +334,7 @@ def main(argv=None, deps: Deps | None = None) -> int:
         deps.out(f"{len(qs)} question(s):")
         for q in qs:
             deps.out(
-                f"  {q.question_id} | {q.approval_status.value} | {q.source} | "
+                f"  {q.question_id} | {q.approval_status.value} | {q.source or '(none)'} | "
                 f"{q.persona.value}/{q.domain.value}/{q.brand_focus} | {q.question_text[:70]}"
             )
         return 0
