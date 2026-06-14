@@ -63,10 +63,12 @@ def test_score_pending_scores_persists_alerts_and_denormalizes(tmp_path):
         "X is first-line and excellent.": ScoreResult(
             sentiment_score=0.8, competitive_position="FIRST_LINE_RECOMMENDED",
             brand_mentions=["Skyrizi"], key_claims=["effective"], scoring_rationale="positive",
+            confidence_level="ASSERTIVE", citation_quality="NONE",
         ),
         "X is not recommended; use Humira.": ScoreResult(
             sentiment_score=-0.6, competitive_position="NOT_RECOMMENDED",
             brand_mentions=["Skyrizi", "Humira"], key_claims=["avoid"], scoring_rationale="negative",
+            confidence_level="HEDGED", citation_quality="LOW",
         ),
     })
 
@@ -99,6 +101,7 @@ def test_score_pending_is_idempotent_on_second_run(tmp_path):
     scorer = _fake_scorer({"neutral text": ScoreResult(
         sentiment_score=0.1, competitive_position="AMONG_OPTIONS",
         brand_mentions=[], key_claims=[], scoring_rationale="r",
+        confidence_level="MIXED", citation_quality="NONE",
     )})
     cfg = _config()
     s1 = score_pending(conn, client=object(), config=cfg, scorer=scorer,
@@ -107,4 +110,29 @@ def test_score_pending_is_idempotent_on_second_run(tmp_path):
                        id_factory=_ids(), now_factory=lambda: NOW)
     assert s1.scored == 1
     assert s2.scored == 0  # already scored -> nothing pending
+    conn.close()
+
+
+def test_score_pending_propagates_new_dimensions(tmp_path):
+    """pipeline must carry confidence_level + citation_quality from scorer into persisted Score."""
+    conn = _conn(tmp_path)
+    _resp(conn, "resp-a", "Therapy may help some patients.")
+
+    scorer = _fake_scorer({
+        "Therapy may help some patients.": ScoreResult(
+            sentiment_score=0.2, competitive_position="AMONG_OPTIONS",
+            brand_mentions=["Skyrizi"], key_claims=["may help"],
+            scoring_rationale="hedged",
+            confidence_level="HEDGED", citation_quality="LOW",
+        ),
+    })
+
+    score_pending(
+        conn, client=object(), config=_config(), scorer=scorer,
+        id_factory=_ids(), now_factory=lambda: NOW,
+    )
+
+    persisted = latest_score(conn, "resp-a")
+    assert persisted.confidence_level == "HEDGED"
+    assert persisted.citation_quality == "LOW"
     conn.close()

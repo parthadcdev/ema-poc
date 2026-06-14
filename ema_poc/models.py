@@ -107,6 +107,8 @@ class Score(BaseModel):
     brand_mentions: list[str] = Field(default_factory=list)
     key_claims: list[str] = Field(default_factory=list)
     scoring_rationale: str | None = None
+    confidence_level: str | None = None
+    citation_quality: str | None = None
     scoring_model: str
     human_override: bool = False
     override_rationale: str | None = None

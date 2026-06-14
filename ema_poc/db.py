@@ -72,6 +72,8 @@ CREATE TABLE IF NOT EXISTS scores (
     brand_mentions       TEXT NOT NULL,
     key_claims           TEXT NOT NULL,
     scoring_rationale    TEXT,
+    confidence_level     TEXT,
+    citation_quality     TEXT,
     scoring_model        TEXT NOT NULL,
     human_override       INTEGER NOT NULL DEFAULT 0,
     override_rationale   TEXT,

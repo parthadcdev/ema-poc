@@ -25,6 +25,8 @@ class FakeScoreResult:
         self.brand_mentions = ["Skyrizi"]
         self.key_claims = []
         self.scoring_rationale = "because"
+        self.confidence_level = "MIXED"
+        self.citation_quality = "MODERATE"
 
 
 def fake_scorer(client, *, response_text, brand_focus, abbvie_brands,

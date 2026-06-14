@@ -30,9 +30,10 @@ def save_score(conn: sqlite3.Connection, score: Score) -> None:
         """
         INSERT INTO scores (
             score_id, response_id, version, sentiment_score, competitive_position,
-            brand_mentions, key_claims, scoring_rationale, scoring_model,
-            human_override, override_rationale, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            brand_mentions, key_claims, scoring_rationale,
+            confidence_level, citation_quality,
+            scoring_model, human_override, override_rationale, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             score.score_id,
@@ -43,6 +44,8 @@ def save_score(conn: sqlite3.Connection, score: Score) -> None:
             json.dumps(score.brand_mentions),
             json.dumps(score.key_claims),
             score.scoring_rationale,
+            score.confidence_level,
+            score.citation_quality,
             score.scoring_model,
             int(score.human_override),
             score.override_rationale,

@@ -41,3 +41,13 @@ def test_row_factory_returns_mappings(tmp_path):
     assert row["run_id"] == "run-1"
     assert row["status"] == "RUNNING"
     conn.close()
+
+
+def test_scores_table_has_new_columns(tmp_path):
+    """scores table must expose confidence_level and citation_quality TEXT columns."""
+    conn = connect(str(tmp_path / "t.sqlite"))
+    init_schema(conn)
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(scores)")}
+    assert "confidence_level" in cols
+    assert "citation_quality" in cols
+    conn.close()

@@ -34,6 +34,8 @@ class ScoreResult(BaseModel):
     brand_mentions: list[str]
     key_claims: list[str]
     scoring_rationale: str
+    confidence_level: Literal["HEDGED", "MIXED", "ASSERTIVE"]
+    citation_quality: Literal["NONE", "LOW", "MODERATE", "HIGH"]
 
 
 def _build_prompt(
@@ -50,7 +52,15 @@ def _build_prompt(
         "Score brand sentiment toward the AbbVie therapy from -1.0 (strongly "
         "negative) to +1.0 (strongly positive). Classify the AbbVie therapy's "
         "competitive positioning. List the brand names mentioned, up to 5 key "
-        "claims about the therapy, and a brief scoring rationale."
+        "claims about the therapy, and a brief scoring rationale. "
+        "Also assess confidence_level (how confidently the response asserts claims "
+        "about the AbbVie therapy: HEDGED = claims heavily qualified with 'may', "
+        "'might', 'could'; MIXED = mix of qualified and definitive claims; "
+        "ASSERTIVE = definitive statements such as 'is first-line') and "
+        "citation_quality (quality of any sources cited: NONE = no sources cited; "
+        "LOW = forums, blogs, or marketing materials; MODERATE = general medical "
+        "or reference sites; HIGH = peer-reviewed literature, clinical guidelines, "
+        "or regulatory labels)."
     )
 
 

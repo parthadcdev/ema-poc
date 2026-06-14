@@ -55,10 +55,12 @@ def test_scoring_pass_end_to_end_with_rescore(tmp_path):
         "Skyrizi is first-line and well tolerated.": ScoreResult(
             sentiment_score=0.7, competitive_position="FIRST_LINE_RECOMMENDED",
             brand_mentions=["Skyrizi"], key_claims=["tolerated"], scoring_rationale="pos",
+            confidence_level="ASSERTIVE", citation_quality="NONE",
         ),
         "Skyrizi is not recommended.": ScoreResult(
             sentiment_score=-0.6, competitive_position="NOT_RECOMMENDED",
             brand_mentions=["Skyrizi"], key_claims=["avoid"], scoring_rationale="neg",
+            confidence_level="HEDGED", citation_quality="NONE",
         ),
     }
 
