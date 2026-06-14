@@ -5,46 +5,415 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EMA Playground</title>
 <style>
-  body { font-family: system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #1a1a1a; }
-  header { background: #1f2a44; color: #fff; padding: 1rem 1.5rem; display: flex; align-items: center; gap: 1rem; }
-  header h1 { margin: 0; font-size: 1.15rem; flex: 1; }
-  .navlink { color: rgba(255,255,255,.78); text-decoration: none; font-size: .82rem; padding: .3rem .75rem; border: 1px solid rgba(255,255,255,.3); border-radius: 4px; white-space: nowrap; }
-  .navlink:hover { background: rgba(255,255,255,.12); color: #fff; }
-  main { max-width: 1100px; margin: 1.5rem auto; padding: 0 1rem; }
-  .panel { background: #fff; border: 1px solid #e3e6eb; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.25rem; }
-  textarea { width: 100%; box-sizing: border-box; min-height: 64px; font: inherit; padding: .5rem; }
-  .row { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; margin-top: .75rem; }
-  label { font-size: .85rem; }
-  .targets label { margin-right: 1rem; white-space: nowrap; }
-  button { background: #2d6cdf; color: #fff; border: 0; border-radius: 6px; padding: .55rem 1.1rem; font: inherit; cursor: pointer; }
-  button:disabled { opacity: .5; cursor: default; }
-  .note { font-size: .78rem; color: #6b7280; margin-top: .5rem; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; }
-  .card { background: #fff; border: 1px solid #e3e6eb; border-radius: 8px; padding: 1rem; }
-  .card h3 { margin: 0 0 .25rem; font-size: 1rem; }
-  .badge { font-size: .7rem; background: #eef2ff; color: #3949ab; border-radius: 10px; padding: .1rem .5rem; margin-left: .4rem; }
-  .chip { display: inline-block; font-size: .78rem; border-radius: 12px; padding: .15rem .6rem; margin-right: .4rem; }
-  .answer { white-space: pre-wrap; font-size: .9rem; margin: .5rem 0; }
-  .citations { font-size: .8rem; border-top: 1px solid #eee; padding-top: .5rem; }
-  .citations a { color: #2d6cdf; }
-  .err { background: #fdecea; color: #8a1c1c; padding: .6rem .9rem; border-radius: 6px; }
-  .spinner { font-size: .8rem; color: #6b7280; }
+/* ---- Design tokens (shared with dashboard) ---- */
+:root {
+  --paper: #efe9dc;
+  --surface: #fbf9f4;
+  --surface-2: #f5f1e8;
+  --ink: #1d2b27;
+  --ink-soft: #5f635c;
+  --ink-faint: #8c8a7e;
+  --rule: #ddd5c4;
+  --rule-soft: #e7e0d2;
+  --accent: #1f5c4d;
+  --accent-deep: #143b31;
+  --accent-mid: #2a7a66;
+  /* Semantic sentiment scale */
+  --pos: #2f7d5b;
+  --pos-soft: #dcebe0;
+  --neu: #a9791a;
+  --neu-soft: #f0e6cf;
+  --neg: #9f3a2f;
+  --neg-soft: #f2ddd6;
+  /* Typography */
+  --serif: "Iowan Old Style", "Hoefler Text", Georgia, "Times New Roman", serif;
+  --sans: ui-sans-serif, -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* Radii / shadows */
+  --radius: 4px;
+  --radius-lg: 8px;
+  --shadow-sm: 0 1px 3px rgba(20, 40, 33, 0.08), 0 1px 2px rgba(20, 40, 33, 0.04);
+  --shadow-card: 0 1px 0 rgba(20, 40, 33, 0.03), 0 10px 24px -20px rgba(20, 40, 33, 0.45);
+}
+
+/* ---- Reset ---- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+body {
+  font-family: var(--sans);
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* ---- Header ---- */
+header {
+  background: var(--accent-deep);
+  color: #fff;
+  padding: .9rem 1.6rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 1px 8px -4px rgba(20, 40, 33, 0.4);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+header h1 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  flex: 1;
+  color: #f2efe6;
+}
+.navlink {
+  color: rgba(255, 255, 255, .75);
+  text-decoration: none;
+  font-family: var(--mono);
+  font-size: .75rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: .3rem .8rem;
+  border: 1px solid rgba(255, 255, 255, .28);
+  border-radius: var(--radius);
+  white-space: nowrap;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.navlink:hover {
+  background: rgba(255, 255, 255, .12);
+  color: #fff;
+  border-color: rgba(255, 255, 255, .5);
+}
+.navlink:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, .6);
+  outline-offset: 2px;
+}
+
+/* ---- Main layout ---- */
+main {
+  max-width: 1100px;
+  margin: 1.75rem auto;
+  padding: 0 1.25rem;
+}
+
+/* ---- Panel (query form) ---- */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow-card);
+}
+
+/* ---- Form controls ---- */
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 72px;
+  font-family: var(--sans);
+  font-size: .9rem;
+  color: var(--ink);
+  padding: .6rem .75rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  resize: vertical;
+  line-height: 1.5;
+  transition: border-color .15s, box-shadow .15s;
+}
+textarea::placeholder { color: var(--ink-faint); }
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(31, 92, 77, .14);
+  background: var(--surface);
+}
+
+.row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: .85rem;
+}
+
+label {
+  font-family: var(--mono);
+  font-size: .72rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+}
+label span {
+  font-family: var(--sans);
+  font-size: .85rem;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--ink-soft);
+}
+
+select, input[type="text"] {
+  font-family: var(--sans);
+  font-size: .85rem;
+  color: var(--ink);
+  padding: .35rem .5rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition: border-color .15s, box-shadow .15s;
+}
+select:focus, input[type="text"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(31, 92, 77, .14);
+}
+
+/* ---- Targets row ---- */
+.targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem .85rem;
+  align-items: center;
+  padding: .6rem .75rem;
+  background: var(--surface-2);
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--radius);
+  margin-top: .85rem;
+}
+.targets label {
+  flex-direction: row;
+  align-items: center;
+  gap: .35rem;
+  font-family: var(--sans);
+  font-size: .82rem;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+  padding: .1rem 0;
+}
+.targets label input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+/* ---- Run button ---- */
+button#run {
+  font-family: var(--mono);
+  font-size: .75rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: var(--radius);
+  padding: .5rem 1.25rem;
+  cursor: pointer;
+  transition: background .15s, transform .1s;
+  box-shadow: 0 1px 3px rgba(20, 40, 33, .2);
+}
+button#run:hover { background: var(--accent-mid); }
+button#run:active { transform: scale(.97); }
+button#run:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+button#run:disabled {
+  opacity: .5;
+  cursor: default;
+  transform: none;
+}
+
+/* ---- Status spinner ---- */
+.spinner {
+  font-family: var(--mono);
+  font-size: .75rem;
+  letter-spacing: .06em;
+  color: var(--ink-faint);
+}
+/* pulsing animation for "Running…" state, respects prefers-reduced-motion */
+@keyframes pulse-fade {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .45; }
+}
+.spinner:not(:empty) {
+  animation: pulse-fade 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner:not(:empty) { animation: none; }
+}
+
+/* ---- Compliance note ---- */
+.note {
+  font-family: var(--mono);
+  font-size: .7rem;
+  letter-spacing: .03em;
+  color: var(--ink-faint);
+  margin-top: .85rem;
+  padding: .5rem .75rem;
+  background: var(--surface-2);
+  border-left: 3px solid var(--rule);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  line-height: 1.55;
+}
+
+/* ---- Error banner ---- */
+#banner { margin-bottom: .5rem; }
+.err {
+  background: var(--neg-soft);
+  color: var(--neg);
+  border: 1px solid #e3c2b8;
+  padding: .65rem 1rem;
+  border-radius: var(--radius);
+  font-size: .875rem;
+  line-height: 1.5;
+}
+
+/* ---- Results grid ---- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.1rem;
+}
+
+/* ---- Result cards ---- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  padding: 1.1rem 1.25rem;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow .15s;
+}
+.card:hover { box-shadow: 0 4px 16px -8px rgba(20, 40, 33, .25); }
+.card h3 {
+  margin: 0 0 .3rem;
+  font-family: var(--serif);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -.01em;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+
+/* ---- Badges (e.g. "web" grounded indicator) ---- */
+.badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: .65rem;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  background: rgba(31, 92, 77, .1);
+  color: var(--accent);
+  border: 1px solid rgba(31, 92, 77, .2);
+  border-radius: 999px;
+  padding: .1rem .45rem;
+  vertical-align: middle;
+}
+
+/* ---- Chips (sentiment, positioning) ---- */
+.chip {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: .72rem;
+  letter-spacing: .03em;
+  border-radius: 999px;
+  padding: .18rem .55rem;
+  margin-right: .35rem;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+/* Shared chip vocabulary — mirrors dashboard semantic scale */
+/* Positive positioning */
+.chip[style*="#d6f5d6"],
+.chip[style*="#e6f0ff"] {
+  background: var(--pos-soft) !important;
+  color: #1f5a3e !important;
+  border-color: #bcd9c5 !important;
+  /* inline style overrides handled below via JS-injected colors */
+}
+/* Score chips use surface */
+.chip[style*="#f0f0f0"] {
+  background: var(--surface-2) !important;
+  color: var(--ink-soft) !important;
+  border-color: var(--rule) !important;
+}
+
+/* ---- Answer text ---- */
+.answer {
+  white-space: pre-wrap;
+  font-size: .88rem;
+  line-height: 1.6;
+  margin: .55rem 0;
+  color: var(--ink);
+}
+
+/* ---- Citations ---- */
+.citations {
+  font-size: .78rem;
+  border-top: 1px solid var(--rule-soft);
+  padding-top: .5rem;
+  margin-top: .4rem;
+  color: var(--ink-soft);
+}
+.citations strong {
+  font-family: var(--mono);
+  font-size: .68rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.citations a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.citations a:hover { text-decoration: underline; }
+.citations ul {
+  margin: .3rem 0 0;
+  padding-left: 1.2rem;
+}
+.citations li { margin: .2rem 0; }
+
+/* ---- Score row ---- */
+.score {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem;
+  margin: .35rem 0;
+}
 </style>
 </head>
 <body>
-<header><h1>Evidence Monitoring &mdash; Real-Time Playground</h1>
-<a href="/dashboard" class="navlink">Dashboard &rarr;</a></header>
+<header>
+  <h1>Evidence Monitoring &mdash; Real-Time Playground</h1>
+  <a href="/dashboard" class="navlink">Dashboard &rarr;</a>
+</header>
 <main>
   <div class="panel">
     <textarea id="question" placeholder="Ask any question (do NOT enter PII/PHI)&hellip;"></textarea>
     <div class="row">
-      <label>Persona:
+      <label>Persona
         <select id="persona">
           <option value="">(default)</option>
           <option>Prospect</option><option>Provider</option><option>Patient</option>
         </select>
       </label>
-      <label>Brand focus: <input id="brand" type="text" placeholder="e.g. Skyrizi" size="14"></label>
+      <label>Brand focus
+        <input id="brand" type="text" placeholder="e.g. Skyrizi" size="14">
+      </label>
     </div>
     <div class="row targets" id="targets"></div>
     <div class="row">
