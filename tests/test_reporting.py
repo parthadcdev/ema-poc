@@ -59,3 +59,27 @@ def test_format_run_report_omits_backfill_for_when_none():
     )
     text = format_run_report(summary)
     assert "backfill for" not in text
+
+
+def test_format_run_report_shows_budget_line_when_exceeded():
+    summary = RunSummary(
+        run_id="run-budget", questions_attempted=5, responses_captured=5,
+        by_status={"SUCCESS": 5, "FAILED": 0, "TRUNCATED": 0, "BLOCKED": 0},
+        failure_count=0, total_tokens=1200, est_cost=0.05,
+        budget_exceeded=True, token_budget=1000,
+    )
+    text = format_run_report(summary)
+    assert "budget exceeded" in text
+    assert "1200" in text
+    assert "1000" in text
+
+
+def test_format_run_report_omits_budget_line_when_not_exceeded():
+    summary = RunSummary(
+        run_id="run-nobudget", questions_attempted=5, responses_captured=5,
+        by_status={"SUCCESS": 5, "FAILED": 0, "TRUNCATED": 0, "BLOCKED": 0},
+        failure_count=0, total_tokens=800, est_cost=0.03,
+        budget_exceeded=False, token_budget=1000,
+    )
+    text = format_run_report(summary)
+    assert "budget exceeded" not in text
