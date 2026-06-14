@@ -14,5 +14,5 @@ settings:
     Prospect: "You are a health information assistant answering a prospective patient researching treatment options. Be balanced and informative."
 
 brands:                            # SE-007: content lives in config, not code
-  abbvie_brands: [Skyrizi, Rinvoq, Humira]
-  competitor_brands: [Stelara, Cosentyx, Taltz, Tremfya, Xeljanz, Olumiant, Enbrel]
+  abbvie_brands: [Skyrizi, Rinvoq, Humira, Vraylar, Ubrelvy, Qulipta, Imbruvica, Venclexta]
+  competitor_brands: [Stelara, Cosentyx, Taltz, Tremfya, Xeljanz, Olumiant, Enbrel, Dupixent, Latuda, Rexulti, Abilify, Seroquel, lithium, Nurtec, Aimovig, topiramate, Calquence]

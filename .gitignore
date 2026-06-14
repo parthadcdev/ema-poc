@@ -20,3 +20,4 @@ htmlcov/
 dashboard_*.html
 dashboard.html
 seed_questions.csv
+questions_full.csv
