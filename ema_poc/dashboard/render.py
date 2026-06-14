@@ -203,6 +203,14 @@ tr.detail td{background:#fffdf7;border-left:3px solid var(--accent)}
 /* ---- Empty state ---- */
 .empty{color:var(--ink-faint);font-style:italic;font-family:var(--serif);margin:.3rem 0}
 
+/* ---- Back-link (cross-nav to playground) ---- */
+.backlink{
+  display:inline-block; margin-bottom:.5rem; font-size:12px;
+  color:var(--ink-faint); text-decoration:none; font-family:var(--mono);
+  letter-spacing:.03em;
+}
+.backlink:hover{color:var(--accent); text-decoration:underline}
+
 /* ---- Placeholder section ---- */
 .placeholder{
   border:2px dashed var(--rule); border-radius:4px; padding:2.5rem;
@@ -1006,16 +1014,27 @@ render();
 </script>"""
 
 
-def render_dashboard_html(dataset: dict) -> str:
+def render_dashboard_html(dataset: dict, *, playground_url: str | None = None) -> str:
     """Render a self-contained HTML dashboard from a dataset dict.
 
     `dataset` must be the shape produced by `collect_dataset`:
     { generated_at, abbvie_brands, competitor_brands, records: [...] }
+
+    When `playground_url` is not None, renders a small back-link near the top
+    of the body (above the masthead). When None the output is byte-identical to
+    the no-kwarg call (backward-compatible).
     """
     # Embed JSON safely: escape </ to prevent injection through </script>
     embedded_json = json.dumps(dataset, ensure_ascii=False).replace("</", r"<\/")
 
     generated_at = _e(dataset.get("generated_at") or "")
+
+    # Back-link rendered only when playground_url is provided
+    backlink = (
+        "<a href=\"" + _e(playground_url) + "\" class=\"backlink\">&larr; Playground</a>"
+        if playground_url is not None
+        else ""
+    )
 
     filter_bar = (
         "<div class='filter-bar'>"
@@ -1063,6 +1082,10 @@ def render_dashboard_html(dataset: dict) -> str:
         "<body>",
         nav,
         "<div class='main-wrap'>",
+    ]
+    if backlink:
+        parts.append(backlink)
+    parts += [
         "<div class='top-bar'>",
         "<h1>Evidence Monitoring Dashboard</h1>",
         filter_bar,

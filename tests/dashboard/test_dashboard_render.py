@@ -691,3 +691,22 @@ def test_medical_self_contained(medical_html):
     stripped = _strip_allowed_content(medical_html)
     assert "http://" not in stripped
     assert "https://" not in stripped
+
+
+# ---------------------------------------------------------------------------
+# Back-link (playground_url kwarg)
+# ---------------------------------------------------------------------------
+
+def test_render_includes_back_link_when_playground_url():
+    """When playground_url is provided, the back-link appears with correct href."""
+    result = render_dashboard_html(_dataset(), playground_url="/")
+    # HTML entity form produced by the renderer
+    assert "← Playground" in result or "&larr; Playground" in result
+    assert 'href="/"' in result
+    assert 'class="backlink"' in result
+
+
+def test_render_omits_back_link_by_default():
+    """When playground_url is not provided, no back-link appears."""
+    result = render_dashboard_html(_dataset())
+    assert 'class="backlink"' not in result
