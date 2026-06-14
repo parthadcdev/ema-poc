@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS questions (
     active           INTEGER NOT NULL DEFAULT 1,
     approval_status  TEXT NOT NULL DEFAULT 'PENDING',
     approver_name    TEXT,
+    source           TEXT NOT NULL DEFAULT 'manual',
     created_at       TEXT NOT NULL,
     updated_at       TEXT NOT NULL,
     deleted_at       TEXT,
@@ -215,6 +216,7 @@ _ADDITIVE_COLUMNS: list[tuple[str, str, str]] = [
     ("scores", "citation_quality", "TEXT"),
     ("drift_baselines", "competitive_position", "TEXT"),
     ("runs", "backfill_for", "TEXT"),
+    ("questions", "source", "TEXT NOT NULL DEFAULT 'manual'"),
 ]
 
 

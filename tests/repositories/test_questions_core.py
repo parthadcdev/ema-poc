@@ -69,3 +69,38 @@ def test_add_duplicate_question_id_raises(tmp_path):
             domain="General",
         )
     conn.close()
+
+
+def test_add_question_with_source_generated(tmp_path):
+    """source='generated' is stored and retrievable via get_current."""
+    conn = _conn(tmp_path)
+    q = add_question(
+        conn,
+        question_id="GEN-1",
+        question_text="q",
+        persona="Provider",
+        domain="Efficacy",
+        source="generated",
+    )
+    assert q.source == "generated"
+    fetched = get_current(conn, "GEN-1")
+    assert fetched is not None
+    assert fetched.source == "generated"
+    conn.close()
+
+
+def test_add_question_default_source_is_manual(tmp_path):
+    """When source is omitted, .source defaults to 'manual'."""
+    conn = _conn(tmp_path)
+    q = add_question(
+        conn,
+        question_id="MAN-1",
+        question_text="q",
+        persona="Patient",
+        domain="Safety",
+    )
+    assert q.source == "manual"
+    fetched = get_current(conn, "MAN-1")
+    assert fetched is not None
+    assert fetched.source == "manual"
+    conn.close()

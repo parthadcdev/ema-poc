@@ -38,8 +38,8 @@ def _insert_version(
         INSERT INTO questions (
             question_id, version, question_text, persona, therapeutic_area,
             brand_focus, domain, active, approval_status, approver_name,
-            created_at, updated_at, deleted_at, delete_reason
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            source, created_at, updated_at, deleted_at, delete_reason
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             q.question_id,
@@ -52,6 +52,7 @@ def _insert_version(
             int(q.active),
             q.approval_status.value,
             q.approver_name,
+            q.source,
             _iso(q.created_at),
             _iso(q.updated_at),
             _iso(q.deleted_at),
@@ -89,6 +90,7 @@ def add_question(
     domain: str,
     therapeutic_area: str | None = None,
     brand_focus: str | None = None,
+    source: str = "manual",
     now: str | None = None,
     commit: bool = True,
 ) -> Question:
@@ -103,6 +105,7 @@ def add_question(
         domain=domain,
         therapeutic_area=therapeutic_area,
         brand_focus=brand_focus,
+        source=source,
         created_at=now,
         updated_at=now,
     )
