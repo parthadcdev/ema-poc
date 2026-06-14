@@ -839,3 +839,31 @@ def test_run_gaps_no_credentials_required():
     )
     main(["run-gaps", "--since", "2026-06-01", "--until", "2026-06-03"], deps=deps)
     assert validated["called"] is False
+
+
+def test_run_gaps_invalid_until_errors():
+    """An invalid --until date raises ConfigError before find_run_gaps is called."""
+    called = {"find_run_gaps": False}
+
+    def _fake_find_run_gaps(conn, **kw):
+        called["find_run_gaps"] = True
+        return []
+
+    deps, out, calls = _fake_deps(find_run_gaps=_fake_find_run_gaps)
+    with pytest.raises(ConfigError):
+        main(["run-gaps", "--since", "2026-06-01", "--until", "nope"], deps=deps)
+    assert called["find_run_gaps"] is False
+
+
+def test_run_gaps_inverted_range_errors():
+    """--since > --until raises ConfigError before find_run_gaps is called."""
+    called = {"find_run_gaps": False}
+
+    def _fake_find_run_gaps(conn, **kw):
+        called["find_run_gaps"] = True
+        return []
+
+    deps, out, calls = _fake_deps(find_run_gaps=_fake_find_run_gaps)
+    with pytest.raises(ConfigError):
+        main(["run-gaps", "--since", "2026-06-05", "--until", "2026-06-01"], deps=deps)
+    assert called["find_run_gaps"] is False

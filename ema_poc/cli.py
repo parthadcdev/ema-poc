@@ -14,6 +14,7 @@ from datetime import date, datetime, timezone
 from ema_poc.config import ConfigError
 from ema_poc.coverage import format_coverage_report
 from ema_poc.reporting import format_health_report, format_run_report
+from ema_poc.run_gaps import format_gaps_report
 
 
 @dataclass
@@ -356,13 +357,14 @@ def main(argv=None, deps: Deps | None = None) -> int:
         return 0
 
     if args.command == "run-gaps":
-        from ema_poc.run_gaps import format_gaps_report
         until = args.until or datetime.now(timezone.utc).date().isoformat()
         for label, value in (("--since", args.since), ("--until", until)):
             try:
                 date.fromisoformat(value)
             except ValueError:
                 raise ConfigError(f"Invalid {label} date: {value!r} (expected YYYY-MM-DD)")
+        if args.since > until:
+            raise ConfigError(f"--since ({args.since}) must be <= --until ({until})")
         conn = _open_db(deps, config)
         gaps = deps.find_run_gaps(conn, start=args.since, end=until)
         deps.out(format_gaps_report(gaps, args.since, until))
