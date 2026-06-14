@@ -22,6 +22,22 @@ def test_create_and_get_run(tmp_path):
     conn.close()
 
 
+def test_create_run_with_backfill_for(tmp_path):
+    conn = _conn(tmp_path)
+    create_run(conn, "r1", started_at=NOW, backfill_for="2026-06-10")
+    run = get_run(conn, "r1")
+    assert run.backfill_for == "2026-06-10"
+    conn.close()
+
+
+def test_create_run_without_backfill_for_is_none(tmp_path):
+    conn = _conn(tmp_path)
+    create_run(conn, "r2", started_at=NOW)
+    run = get_run(conn, "r2")
+    assert run.backfill_for is None
+    conn.close()
+
+
 def test_finish_run_updates_summary_fields(tmp_path):
     conn = _conn(tmp_path)
     create_run(conn, "r1", started_at=NOW)

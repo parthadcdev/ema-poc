@@ -74,6 +74,7 @@ class Run(BaseModel):
     total_tokens: int = 0
     est_cost: float = 0.0
     status: str = "RUNNING"
+    backfill_for: str | None = None
 
 
 class Response(BaseModel):
