@@ -210,6 +210,72 @@ tr.detail td{background:#fffdf7;border-left:3px solid var(--accent)}
 }
 .placeholder p{font-family:var(--serif); font-size:1.05rem; font-style:italic; margin:0}
 
+/* ---- Medical Affairs: review queue ---- */
+.med-note{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.04em;
+  color:var(--ink-faint); background:var(--surface-2); border:1px solid var(--rule);
+  border-radius:2px; padding:.45rem .85rem; margin:0 0 1.2rem;
+}
+.queue-item{
+  border:1px solid var(--rule); border-radius:2px; margin:0 0 .7rem;
+  background:var(--surface); overflow:hidden;
+  box-shadow:0 1px 0 rgba(20,40,33,.03);
+}
+.queue-item-header{
+  display:flex; flex-wrap:wrap; gap:.4rem .7rem; align-items:baseline;
+  padding:.65rem .9rem; cursor:pointer; user-select:none;
+  border-left:4px solid var(--rule); transition:background .12s;
+}
+.queue-item-header:hover{background:var(--surface-2)}
+.queue-item.risk-high .queue-item-header{border-left-color:#9f3a2f}
+.queue-item.risk-medium .queue-item-header{border-left-color:#a9791a}
+.queue-item.risk-low .queue-item-header{border-left-color:#5ba4a0}
+.queue-item.risk-none .queue-item-header{border-left-color:var(--rule-soft)}
+.qi-id{font-family:var(--mono); font-size:11px; font-weight:700; color:var(--accent); flex-shrink:0}
+.qi-text{font-size:13px; color:var(--ink); flex:1 1 200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:400px}
+.qi-meta{font-family:var(--mono); font-size:10.5px; color:var(--ink-faint)}
+.qi-badges{display:flex; flex-wrap:wrap; gap:.3rem; align-items:center; margin-left:auto}
+/* Hallucination risk badges */
+.badge{
+  display:inline-block; font-family:var(--mono); font-size:10px; font-weight:600;
+  letter-spacing:.04em; padding:.16rem .52rem; border-radius:999px; white-space:nowrap;
+}
+.badge-hall-high{background:#fde8e8; color:#7a1f1f; border:1px solid #f0bebe}
+.badge-hall-medium{background:var(--neu-soft); color:#7c5908; border:1px solid #e4d2a6}
+.badge-hall-low{background:#e6f5ef; color:#1f5a3e; border:1px solid #b8dcca}
+.badge-drift{background:#e8edf8; color:#2b4a8c; border:1px solid #bfcbe8}
+.badge-alert{background:var(--surface-2); color:var(--ink-soft); border:1px solid var(--rule)}
+/* Severity badges for flagged claims */
+.sev-high{background:#fde8e8; color:#7a1f1f; border:1px solid #f0bebe}
+.sev-medium{background:var(--neu-soft); color:#7c5908; border:1px solid #e4d2a6}
+.sev-low{background:#e6f5ef; color:#1f5a3e; border:1px solid #b8dcca}
+/* Expandable detail panel */
+.queue-detail{
+  display:none; padding:.75rem 1rem .9rem 1rem;
+  border-top:1px solid var(--rule-soft); background:#fffdf7;
+}
+.queue-detail.open{display:block}
+.qd-section{margin:0 0 .9rem}
+.qd-label{
+  font-family:var(--mono); font-size:9px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--ink-faint); margin:0 0 .25rem;
+}
+.qd-value{font-size:13px; white-space:pre-wrap; line-height:1.55}
+.qd-claim{
+  border-left:3px solid var(--rule); padding:.3rem .65rem; margin:.35rem 0;
+  border-radius:0 2px 2px 0; font-size:12.5px; background:rgba(159,58,47,.03);
+}
+.qd-claim-text{color:var(--ink); margin-bottom:.18rem}
+.qd-claim-conflict{color:var(--ink-soft); font-style:italic; font-size:12px}
+.signal-chips{display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.25rem}
+.signal-chip{
+  display:inline-flex; align-items:center; gap:.3rem;
+  font-family:var(--mono); font-size:10.5px; padding:.18rem .5rem;
+  border:1px solid var(--rule); border-radius:2px; background:var(--surface-2);
+  color:var(--ink-soft);
+}
+.signal-chip .sc-label{color:var(--ink-faint); font-size:9.5px; letter-spacing:.1em; text-transform:uppercase}
+
 /* ---- Share of Voice / Stacked bar tracks ---- */
 .sov-row{display:flex;align-items:center;gap:.7rem;margin:.45rem 0;font-size:12.5px}
 .sov-label{width:160px;flex-shrink:0;text-align:right;color:var(--ink-soft);font-family:var(--sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
@@ -706,11 +772,153 @@ function renderMarketing(rows){
 }
 
 /* ====================================================================
-   renderMedical — stub (Task 4)
+   renderMedical — Medical Affairs review queue
    ==================================================================== */
 function renderMedical(rows){
+  /* ---- 1. Summary counts ---- */
+  var hallHigh   = rows.filter(function(r){ return r.hallucination_risk === 'HIGH'; }).length;
+  var hallMedium = rows.filter(function(r){ return r.hallucination_risk === 'MEDIUM'; }).length;
+  var hallLow    = rows.filter(function(r){ return r.hallucination_risk === 'LOW'; }).length;
+  var hallNone   = rows.filter(function(r){ return r.hallucination_risk === 'NONE'; }).length;
+  var driftCt    = rows.filter(function(r){
+    return (r.alert_reasons||[]).some(function(a){ return a.startsWith('DRIFT:'); });
+  }).length;
+  var alertCt    = rows.filter(function(r){ return r.alert_triggered; }).length;
+
+  var tilesHtml =
+    "<div class='tiles'>" +
+    "<div class='tile "+(hallHigh>0?'flag':'')+"'><div class='lab'>Hallucination HIGH</div><div class='num'>"+esc(hallHigh)+"</div></div>" +
+    "<div class='tile "+(hallMedium>0?'warn':'')+"'><div class='lab'>Hallucination MEDIUM</div><div class='num'>"+esc(hallMedium)+"</div></div>" +
+    "<div class='tile'><div class='lab'>Hallucination LOW</div><div class='num'>"+esc(hallLow)+"</div></div>" +
+    "<div class='tile'><div class='lab'>Hallucination NONE</div><div class='num'>"+esc(hallNone)+"</div></div>" +
+    "<div class='tile "+(driftCt>0?'warn':'')+"'><div class='lab'>Drift Alerts</div><div class='num'>"+esc(driftCt)+"</div></div>" +
+    "<div class='tile "+(alertCt>0?'flag':'')+"'><div class='lab'>Alerts Triggered</div><div class='num'>"+esc(alertCt)+"</div></div>" +
+    "</div>";
+
+  var noteHtml = "<div class='med-note'>Review queue &mdash; approve or revise questions via the <code>ema</code> CLI (read-only view).</div>";
+
+  /* ---- 2. Build review queue ---- */
+  var HALL_NEEDS_REVIEW = {'HIGH':true,'MEDIUM':true};
+  var queueRows = rows.filter(function(r){
+    return r.alert_triggered || HALL_NEEDS_REVIEW[r.hallucination_risk];
+  });
+
+  /* Sort: HIGH hallucination first, then most flags, then others */
+  queueRows.sort(function(a,b){
+    var riskOrder = {HIGH:0,MEDIUM:1,LOW:2,NONE:3};
+    var ra = riskOrder[a.hallucination_risk];
+    var rb = riskOrder[b.hallucination_risk];
+    if(ra !== undefined && rb !== undefined && ra !== rb) return ra - rb;
+    if(ra !== undefined && rb === undefined) return -1;
+    if(ra === undefined && rb !== undefined) return 1;
+    var fa = (a.hallucination_flags||[]).length;
+    var fb = (b.hallucination_flags||[]).length;
+    if(fa !== fb) return fb - fa;
+    return 0;
+  });
+
+  var queueHtml;
+  if(queueRows.length === 0){
+    queueHtml = "<p class='empty'>No items need review for the current filters.</p>";
+  } else {
+    queueHtml = queueRows.map(function(r, idx){
+      var qtext  = r.question_text || '';
+      var qshort = qtext.length > 90 ? qtext.slice(0,87)+'…' : qtext;
+      var hrisk  = r.hallucination_risk || '';
+      var flags  = r.hallucination_flags || [];
+      var reasons= r.alert_reasons || [];
+
+      /* Risk CSS class for left-border accent */
+      var riskCls = {HIGH:'risk-high',MEDIUM:'risk-medium',LOW:'risk-low',NONE:'risk-none'}[hrisk] || '';
+
+      /* Badges */
+      var badges = '';
+      if(hrisk === 'HIGH'){
+        badges += "<span class='badge badge-hall-high'>Hallucination: HIGH</span>";
+      } else if(hrisk === 'MEDIUM'){
+        badges += "<span class='badge badge-hall-medium'>Hallucination: MEDIUM</span>";
+      } else if(hrisk === 'LOW'){
+        badges += "<span class='badge badge-hall-low'>Hallucination: LOW</span>";
+      }
+      var hasDrift = reasons.some(function(a){ return a.startsWith('DRIFT:'); });
+      if(hasDrift){
+        badges += "<span class='badge badge-drift'>DRIFT</span>";
+      }
+      var hasOtherAlert = r.alert_triggered && reasons.some(function(a){
+        return !a.startsWith('DRIFT:') && !a.startsWith('HALLUCINATION:');
+      });
+      if(hasOtherAlert){
+        badges += "<span class='badge badge-alert'>Alert</span>";
+      }
+
+      /* Flagged claims section */
+      var claimsHtml = '';
+      if(flags.length > 0){
+        var flagItems = flags.map(function(f){
+          var sevCls = {HIGH:'sev-high',MEDIUM:'sev-medium',LOW:'sev-low'}[f.severity] || '';
+          return "<div class='qd-claim'>" +
+            "<div class='qd-claim-text'>"+esc(f.claim||'')+"</div>" +
+            "<div class='qd-claim-conflict'>conflicts with: "+esc(f.conflicts_with||'')+"</div>" +
+            (f.severity ? "<span class='badge "+sevCls+"' style='margin-top:.25rem;display:inline-block'>"+esc(f.severity)+"</span>" : '') +
+            "</div>";
+        }).join('');
+        claimsHtml =
+          "<div class='qd-section'>" +
+          "<div class='qd-label'>Flagged Claims</div>" +
+          flagItems +
+          "</div>";
+      }
+
+      /* Signals chips */
+      var signalParts = [];
+      if(r.confidence_level){
+        signalParts.push("<span class='signal-chip'><span class='sc-label'>Confidence</span>"+esc(r.confidence_level)+"</span>");
+      }
+      if(r.citation_quality){
+        signalParts.push("<span class='signal-chip'><span class='sc-label'>Citation</span>"+esc(r.citation_quality)+"</span>");
+      }
+      var signalsHtml = signalParts.length > 0
+        ? "<div class='qd-section'><div class='qd-label'>Signals</div><div class='signal-chips'>"+signalParts.join('')+"</div></div>"
+        : '';
+
+      /* Alert reasons */
+      var alertReasonsHtml = '';
+      if(reasons.length > 0){
+        var reasonItems = reasons.map(function(a){
+          return "<div style='font-size:12px;color:var(--neg);margin:.1rem 0'>"+esc(a)+"</div>";
+        }).join('');
+        alertReasonsHtml =
+          "<div class='qd-section'><div class='qd-label'>Alert Reasons</div>"+reasonItems+"</div>";
+      }
+
+      var detailId = 'qdet-'+idx;
+
+      return "<div class='queue-item "+riskCls+"'>" +
+        "<div class='queue-item-header' onclick=\"var d=document.getElementById('"+detailId+"');d.classList.toggle('open')\">" +
+          "<span class='qi-id'>"+esc(r.question_id)+"</span>" +
+          "<span class='qi-text' title='"+esc(qtext)+"'>"+esc(qshort)+"</span>" +
+          "<span class='qi-meta'>"+esc(r.llm_name)+" &middot; "+esc(r.brand_focus)+"</span>" +
+          "<span class='qi-badges'>"+badges+"</span>" +
+        "</div>" +
+        "<div class='queue-detail' id='"+detailId+"'>" +
+          claimsHtml +
+          "<div class='qd-section'><div class='qd-label'>Full Response</div><div class='qd-value'>"+esc(r.response_text||'')+"</div></div>" +
+          "<div class='qd-section'><div class='qd-label'>Scoring Rationale</div><div class='qd-value'>"+esc(r.scoring_rationale||'')+"</div></div>" +
+          signalsHtml +
+          alertReasonsHtml +
+        "</div>" +
+        "</div>";
+    }).join('');
+  }
+
   document.getElementById('view-medical').innerHTML =
-    "<div class='placeholder'><p>Medical Affairs &mdash; coming soon.</p></div>";
+    tilesHtml +
+    noteHtml +
+    "<div class='card'>" +
+    "<h2>Review Queue</h2>" +
+    "<p class='hint'>Responses requiring Medical Affairs attention: hallucination risk MEDIUM/HIGH or alert triggered.</p>" +
+    queueHtml +
+    "</div>";
 }
 
 /* ====================================================================

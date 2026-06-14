@@ -515,3 +515,177 @@ def test_marketing_svg_namespace_allowed_by_self_contained_rule(marketing_html):
     assert "http://www.w3.org/2000/svg" not in stripped     # removed by whitelist
     # and no other http remains
     assert "http://" not in stripped
+
+
+# ---------------------------------------------------------------------------
+# Medical Affairs — JS source markers and embedded-data assertions
+# ---------------------------------------------------------------------------
+
+def _medical_dataset():
+    """Dataset with a HIGH-hallucination record (with flags) and a DRIFT alert."""
+    return {
+        "generated_at": "2026-06-13T00:00:00Z",
+        "abbvie_brands": ["Skyrizi"],
+        "competitor_brands": ["Humira"],
+        "records": [
+            {
+                "response_id": "med1",
+                "timestamp_utc": "2026-06-13T10:00:00+00:00",
+                "date": "2026-06-13",
+                "llm_name": "GPT-4o",
+                "grounded": False,
+                "persona": "Provider",
+                "question_id": "Q-MED-001",
+                "question_text": "Does Skyrizi cure psoriasis permanently?",
+                "therapeutic_area": "Immunology",
+                "brand_focus": "Skyrizi",
+                "domain": "Efficacy",
+                "status": "SUCCESS",
+                "response_text": "Skyrizi permanently eliminates psoriasis in 95% of patients.",
+                "sentiment_score": 0.9,
+                "competitive_position": "FIRST_LINE_RECOMMENDED",
+                "confidence_level": "ASSERTIVE",
+                "citation_quality": "NONE",
+                "brand_mentions": ["Skyrizi"],
+                "scoring_rationale": "Overstated efficacy claim without citation.",
+                "hallucination_risk": "HIGH",
+                "hallucination_flags": [
+                    {
+                        "claim": "permanently eliminates psoriasis in 95% of patients",
+                        "conflicts_with": "clinical trial data showing remission, not cure",
+                        "severity": "HIGH",
+                    }
+                ],
+                "alert_reasons": ["HALLUCINATION:unsupported_claim"],
+                "alert_triggered": True,
+            },
+            {
+                "response_id": "med2",
+                "timestamp_utc": "2026-06-13T11:00:00+00:00",
+                "date": "2026-06-13",
+                "llm_name": "Gemini-Pro",
+                "grounded": False,
+                "persona": "Patient",
+                "question_id": "Q-MED-002",
+                "question_text": "Is Skyrizi still recommended for plaque psoriasis?",
+                "therapeutic_area": "Immunology",
+                "brand_focus": "Skyrizi",
+                "domain": "Efficacy",
+                "status": "SUCCESS",
+                "response_text": "Skyrizi is recommended for moderate to severe plaque psoriasis.",
+                "sentiment_score": 0.5,
+                "competitive_position": "FIRST_LINE_RECOMMENDED",
+                "confidence_level": "HEDGED",
+                "citation_quality": "MODERATE",
+                "brand_mentions": ["Skyrizi"],
+                "scoring_rationale": "Guideline-aligned response.",
+                "hallucination_risk": "NONE",
+                "hallucination_flags": [],
+                "alert_reasons": ["DRIFT:sentiment_shift"],
+                "alert_triggered": True,
+            },
+            {
+                "response_id": "med3",
+                "timestamp_utc": "2026-06-13T12:00:00+00:00",
+                "date": "2026-06-13",
+                "llm_name": "Claude-3",
+                "grounded": False,
+                "persona": "Prospect",
+                "question_id": "Q-MED-003",
+                "question_text": "What is Skyrizi dosing?",
+                "therapeutic_area": "Immunology",
+                "brand_focus": "Skyrizi",
+                "domain": "Dosing",
+                "status": "SUCCESS",
+                "response_text": "Skyrizi is dosed 150mg every 12 weeks after induction.",
+                "sentiment_score": 0.2,
+                "competitive_position": None,
+                "confidence_level": "ASSERTIVE",
+                "citation_quality": "HIGH",
+                "brand_mentions": ["Skyrizi"],
+                "scoring_rationale": "Accurate dosing information.",
+                "hallucination_risk": "NONE",
+                "hallucination_flags": [],
+                "alert_reasons": [],
+                "alert_triggered": False,
+            },
+        ],
+    }
+
+
+@pytest.fixture()
+def medical_html():
+    return render_dashboard_html(_medical_dataset())
+
+
+def test_medical_render_function_present(medical_html):
+    """The JS source must define renderMedical."""
+    assert "function renderMedical" in medical_html
+
+
+def test_medical_hallucination_flags_reference(medical_html):
+    """The JS source must reference hallucination_flags."""
+    assert "hallucination_flags" in medical_html
+
+
+def test_medical_hallucination_risk_reference(medical_html):
+    """The JS source must reference hallucination_risk."""
+    assert "hallucination_risk" in medical_html
+
+
+def test_medical_conflicts_with_reference(medical_html):
+    """The JS source must reference conflicts_with for flagged claims."""
+    assert "conflicts_with" in medical_html
+
+
+def test_medical_review_queue_marker(medical_html):
+    """The JS source must include a 'review' queue marker."""
+    assert "review" in medical_html.lower()
+
+
+def test_medical_drift_badge_logic(medical_html):
+    """The JS source must include DRIFT badge logic."""
+    assert "DRIFT" in medical_html
+
+
+def test_medical_high_hallucination_in_embedded_json(medical_html):
+    """The HIGH-hallucination record appears in the embedded JSON."""
+    parsed = _extract_embedded_json(medical_html)
+    high_risk = [r for r in parsed["records"] if r.get("hallucination_risk") == "HIGH"]
+    assert len(high_risk) == 1
+    assert high_risk[0]["question_id"] == "Q-MED-001"
+
+
+def test_medical_flagged_claim_text_in_embedded_json(medical_html):
+    """The flagged claim text appears in the embedded JSON dataset."""
+    parsed = _extract_embedded_json(medical_html)
+    high_risk = [r for r in parsed["records"] if r.get("hallucination_risk") == "HIGH"]
+    assert len(high_risk) == 1
+    flags = high_risk[0].get("hallucination_flags", [])
+    assert len(flags) == 1
+    assert "permanently eliminates psoriasis in 95% of patients" in flags[0]["claim"]
+
+
+def test_medical_response_text_in_embedded_json(medical_html):
+    """The HIGH-risk record's response_text appears in the embedded JSON."""
+    assert "permanently eliminates psoriasis in 95% of patients" in medical_html
+
+
+def test_medical_drift_alert_record_in_embedded_json(medical_html):
+    """The DRIFT alert record appears in the embedded JSON."""
+    parsed = _extract_embedded_json(medical_html)
+    drift_records = [
+        r for r in parsed["records"]
+        if any(a.startswith("DRIFT:") for a in (r.get("alert_reasons") or []))
+    ]
+    assert len(drift_records) == 1
+    assert drift_records[0]["question_id"] == "Q-MED-002"
+
+
+def test_medical_self_contained(medical_html):
+    """The medical dataset page must still pass the self-contained rule."""
+    assert "<script src" not in medical_html
+    assert "<link " not in medical_html
+    stripped = _strip_allowed_content(medical_html)
+    assert "http://" not in stripped
+    assert "https://" not in stripped
