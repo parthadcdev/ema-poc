@@ -37,6 +37,7 @@ class Deps:
     make_embedding_client: Callable | None = None
     check_hallucinations: Callable | None = None
     load_reference_corpus: Callable | None = None
+    compute_consensus: Callable | None = None
 
 
 def _make_scoring_client(env):
@@ -65,6 +66,7 @@ def default_deps() -> Deps:
     from ema_poc.drift.embeddings import default_embedding_client
     from ema_poc.hallucination.pipeline import check_pending
     from ema_poc.hallucination.corpus import load_reference_corpus
+    from ema_poc.consensus.compute import compute_consensus
 
     def _serve_app(app, *, host, port):
         import uvicorn
@@ -96,6 +98,7 @@ def default_deps() -> Deps:
         make_embedding_client=_make_embedding_client,
         check_hallucinations=check_pending,
         load_reference_corpus=load_reference_corpus,
+        compute_consensus=compute_consensus,
     )
 
 
@@ -137,6 +140,8 @@ def _parse_args(argv):
     sub.add_parser("drift", help="Detect semantic drift vs the frozen baseline and raise alerts")
 
     sub.add_parser("check-hallucinations", help="Flag responses that contradict the reference corpus")
+
+    sub.add_parser("consensus", help="Compute majority-vote consensus across samples + variance alerts")
 
     return parser.parse_args(argv)
 
@@ -249,6 +254,12 @@ def main(argv=None, deps: Deps | None = None) -> int:
         client = deps.make_scoring_client(deps.env)
         summary = deps.check_hallucinations(conn, client=client, config=config, corpus=corpus)
         deps.out(f"Checked {summary.checked}, alerts raised {summary.alerts_raised}.")
+        return 0
+
+    if args.command == "consensus":
+        conn = _open_db(deps, config)
+        summary = deps.compute_consensus(conn)
+        deps.out(f"Consensus: {summary.groups} group(s), variance alerts {summary.alerts_raised}.")
         return 0
 
     # run
