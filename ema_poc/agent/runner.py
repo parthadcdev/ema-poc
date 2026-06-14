@@ -102,7 +102,7 @@ def run(
     questions_attempted = 0
     responses_captured = 0
     failure_count = 0
-    total_tokens = 0
+    total_tokens = 0  # per-invocation; a resumed run starts a fresh budget (soft cap)
     est_cost = 0.0
 
     pool = ThreadPoolExecutor(max_workers=max_workers or max(1, len(adapters)))

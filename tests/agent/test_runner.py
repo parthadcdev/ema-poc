@@ -506,8 +506,7 @@ def test_budget_cap_stops_run_and_marks_exceeded(tmp_path):
             "SELECT DISTINCT question_id FROM responses WHERE run_id='run-budget'"
         ).fetchall()
     }
-    assert len(distinct_qids) >= 1, "partial data must be retained"
-    assert len(distinct_qids) < 3, "Q2 and Q3 must NOT have been dispatched"
+    assert len(distinct_qids) == 1, "exactly one question (Q1) must have been dispatched"
     assert "Q1" in distinct_qids
 
     conn.close()
