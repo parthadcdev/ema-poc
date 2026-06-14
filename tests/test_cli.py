@@ -163,3 +163,81 @@ def test_serve_builds_app_and_binds_localhost(tmp_path):
     assert recorded["host"] == "127.0.0.1"
     assert recorded["port"] == 9999
     assert recorded["has_stream_route"] is True
+
+
+# ---------------------------------------------------------------------------
+# coverage command tests
+# ---------------------------------------------------------------------------
+
+def test_coverage_command_returns_zero_and_prints_report():
+    from ema_poc.coverage import QuestionEffectiveness
+
+    stub_items = [
+        QuestionEffectiveness(
+            question_id="Q1",
+            question_text="Does BrandX help with asthma?",
+            brand_focus="BrandX",
+            total_scored=4,
+            not_mentioned=4,
+            not_mentioned_rate=1.0,
+            low_value=True,
+        ),
+        QuestionEffectiveness(
+            question_id="Q2",
+            question_text="What are the benefits of BrandY?",
+            brand_focus="BrandY",
+            total_scored=3,
+            not_mentioned=1,
+            not_mentioned_rate=1 / 3,
+            low_value=False,
+        ),
+    ]
+
+    def _fake_coverage(conn, *, min_responses, not_mentioned_threshold):
+        return stub_items
+
+    deps, out, calls = _fake_deps(coverage=_fake_coverage)
+    rc = main(["coverage"], deps=deps)
+
+    assert rc == 0
+    full_output = "\n".join(out)
+    assert "LOW-VALUE" in full_output
+    assert "Q1" in full_output
+    assert "Q2" in full_output
+    assert "flagged low-value" in full_output
+
+
+def test_coverage_command_passes_cli_args_to_function():
+    received = {}
+
+    def _fake_coverage(conn, *, min_responses, not_mentioned_threshold):
+        received["min_responses"] = min_responses
+        received["not_mentioned_threshold"] = not_mentioned_threshold
+        return []
+
+    deps, out, _ = _fake_deps(coverage=_fake_coverage)
+    rc = main(
+        ["coverage", "--min-responses", "5", "--not-mentioned-threshold", "0.9"],
+        deps=deps,
+    )
+
+    assert rc == 0
+    assert received["min_responses"] == 5
+    assert abs(received["not_mentioned_threshold"] - 0.9) < 1e-9
+    full_output = "\n".join(out)
+    assert "No scored responses" in full_output
+
+
+def test_coverage_command_does_not_validate_credentials():
+    """coverage is read-only — it must NOT call validate_credentials."""
+    validated = {"called": False}
+
+    def _validate(config, env):
+        validated["called"] = True
+
+    deps, out, _ = _fake_deps(
+        validate_credentials=_validate,
+        coverage=lambda conn, **kw: [],
+    )
+    main(["coverage"], deps=deps)
+    assert validated["called"] is False
