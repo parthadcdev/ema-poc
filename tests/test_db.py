@@ -146,3 +146,33 @@ def test_init_schema_migrates_missing_columns(tmp_path):
     # idempotent: running again is fine
     init_schema(conn)
     conn.close()
+
+
+def test_init_schema_migrates_backfill_for_to_old_runs_table(tmp_path):
+    """init_schema must ALTER backfill_for into a pre-existing runs table that lacks it."""
+    import sqlite3 as _sqlite3
+
+    p = str(tmp_path / "old_runs.sqlite")
+    raw = _sqlite3.connect(p)
+    raw.execute(
+        "CREATE TABLE runs ("
+        "run_id TEXT PRIMARY KEY, started_at TEXT NOT NULL, ended_at TEXT, "
+        "questions_attempted INTEGER NOT NULL DEFAULT 0, "
+        "responses_captured INTEGER NOT NULL DEFAULT 0, "
+        "failure_count INTEGER NOT NULL DEFAULT 0, "
+        "total_tokens INTEGER NOT NULL DEFAULT 0, "
+        "est_cost REAL NOT NULL DEFAULT 0, "
+        "status TEXT NOT NULL DEFAULT 'RUNNING')"
+    )
+    raw.commit()
+    raw.close()
+
+    conn = connect(p)
+    init_schema(conn)  # should ALTER in backfill_for
+
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(runs)")}
+    assert "backfill_for" in cols
+
+    # idempotent
+    init_schema(conn)
+    conn.close()

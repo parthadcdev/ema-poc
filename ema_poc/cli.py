@@ -9,7 +9,9 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import date
 
+from ema_poc.config import ConfigError
 from ema_poc.coverage import format_coverage_report
 from ema_poc.reporting import format_health_report, format_run_report
 
@@ -114,6 +116,8 @@ def _parse_args(argv):
     p_run.add_argument("--domain")
     p_run.add_argument("--run-id", dest="run_id", default=None,
                        help="Resume an existing run by id (re-dispatches only uncaptured work)")
+    p_run.add_argument("--backfill-for", dest="backfill_for", default=None,
+                       help="Tag this run as a backfill for a missed date (YYYY-MM-DD)")
     p_run.add_argument("--score", action="store_true", help="Score responses after the run")
 
     sub.add_parser("dry-run", help="Validate config + target connectivity (no writes)")
@@ -156,6 +160,15 @@ def main(argv=None, deps: Deps | None = None) -> int:
     deps = deps or default_deps()
     args = _parse_args(argv)
     config = deps.load_config(args.config_dir)
+
+    backfill_for = getattr(args, "backfill_for", None)
+    if backfill_for is not None:
+        try:
+            args.backfill_for = date.fromisoformat(backfill_for).isoformat()
+        except ValueError:
+            raise ConfigError(
+                f"Invalid --backfill-for date: {backfill_for!r} (expected YYYY-MM-DD)"
+            )
 
     if args.command in ("run", "dry-run", "score", "healthcheck", "serve", "drift", "check-hallucinations"):
         deps.validate_credentials(config, deps.env)
@@ -270,6 +283,7 @@ def main(argv=None, deps: Deps | None = None) -> int:
         run_id=args.run_id,
         persona=args.persona, therapeutic_area=args.therapeutic_area,
         brand_focus=args.brand_focus, domain=args.domain,
+        backfill_for=args.backfill_for,
     )
     scoring = None
     if args.score:

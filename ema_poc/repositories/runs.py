@@ -7,10 +7,10 @@ import sqlite3
 from ema_poc.models import Run
 
 
-def create_run(conn: sqlite3.Connection, run_id: str, *, started_at: str) -> None:
+def create_run(conn: sqlite3.Connection, run_id: str, *, started_at: str, backfill_for: str | None = None) -> None:
     conn.execute(
-        "INSERT INTO runs (run_id, started_at, status) VALUES (?, ?, 'RUNNING')",
-        (run_id, started_at),
+        "INSERT INTO runs (run_id, started_at, status, backfill_for) VALUES (?, ?, 'RUNNING', ?)",
+        (run_id, started_at, backfill_for),
     )
     conn.commit()
 

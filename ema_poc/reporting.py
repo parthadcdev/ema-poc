@@ -12,6 +12,7 @@ def format_run_report(
 ) -> str:
     lines = [
         f"Run {summary.run_id}",
+        *([f"  backfill for:        {summary.backfill_for}"] if summary.backfill_for is not None else []),
         f"  questions attempted: {summary.questions_attempted}",
         f"  responses captured:  {summary.responses_captured}",
         f"  by status:           {summary.by_status}",

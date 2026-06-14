@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS runs (
     failure_count       INTEGER NOT NULL DEFAULT 0,
     total_tokens        INTEGER NOT NULL DEFAULT 0,
     est_cost            REAL NOT NULL DEFAULT 0,
-    status              TEXT NOT NULL DEFAULT 'RUNNING'
+    status              TEXT NOT NULL DEFAULT 'RUNNING',
+    backfill_for        TEXT
 );
 
 CREATE TABLE IF NOT EXISTS responses (
@@ -213,6 +214,7 @@ _ADDITIVE_COLUMNS: list[tuple[str, str, str]] = [
     ("scores", "confidence_level", "TEXT"),
     ("scores", "citation_quality", "TEXT"),
     ("drift_baselines", "competitive_position", "TEXT"),
+    ("runs", "backfill_for", "TEXT"),
 ]
 
 

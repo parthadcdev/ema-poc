@@ -36,3 +36,26 @@ def test_format_health_report():
     assert "OK" in text and "GPT-4o" in text
     assert "FAIL" in text and "Claude" in text
     assert "timeout" in text
+
+
+def test_format_run_report_shows_backfill_for_when_set():
+    summary = RunSummary(
+        run_id="run-bf", questions_attempted=1, responses_captured=1,
+        by_status={"SUCCESS": 1, "FAILED": 0, "TRUNCATED": 0, "BLOCKED": 0},
+        failure_count=0, total_tokens=10, est_cost=0.001,
+        backfill_for="2026-06-10",
+    )
+    text = format_run_report(summary)
+    assert "backfill for" in text
+    assert "2026-06-10" in text
+
+
+def test_format_run_report_omits_backfill_for_when_none():
+    summary = RunSummary(
+        run_id="run-nobf", questions_attempted=1, responses_captured=1,
+        by_status={"SUCCESS": 1, "FAILED": 0, "TRUNCATED": 0, "BLOCKED": 0},
+        failure_count=0, total_tokens=10, est_cost=0.001,
+        backfill_for=None,
+    )
+    text = format_run_report(summary)
+    assert "backfill for" not in text
