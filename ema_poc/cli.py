@@ -32,6 +32,9 @@ class Deps:
     build_dashboard: Callable | None = None
     serve_app: Callable | None = None
     coverage: Callable | None = None
+    freeze_baseline: Callable | None = None
+    detect_drift: Callable | None = None
+    make_embedding_client: Callable | None = None
 
 
 def _make_scoring_client(env):
@@ -55,10 +58,17 @@ def default_deps() -> Deps:
     from ema_poc.coverage import question_effectiveness
     from ema_poc.dashboard.build import build_dashboard
     from ema_poc.scoring.pipeline import score_pending
+    from ema_poc.drift.baseline import freeze_baseline
+    from ema_poc.drift.detector import detect_drift
+    from ema_poc.drift.embeddings import default_embedding_client
 
     def _serve_app(app, *, host, port):
         import uvicorn
         uvicorn.run(app, host=host, port=port)
+
+    def _make_embedding_client(env, config):
+        key = env.get(config.drift.embedding_api_key_env)
+        return default_embedding_client(key, config.drift.embedding_model)
 
     return Deps(
         load_config=load_config,
@@ -77,6 +87,9 @@ def default_deps() -> Deps:
         build_dashboard=build_dashboard,
         serve_app=_serve_app,
         coverage=question_effectiveness,
+        freeze_baseline=freeze_baseline,
+        detect_drift=detect_drift,
+        make_embedding_client=_make_embedding_client,
     )
 
 
@@ -112,6 +125,11 @@ def _parse_args(argv):
     p_cov.add_argument("--min-responses", type=int, default=3)
     p_cov.add_argument("--not-mentioned-threshold", type=float, default=0.8)
 
+    p_bf = sub.add_parser("baseline-freeze", help="Freeze the v0 drift baseline (one-time)")
+    p_bf.add_argument("--force", action="store_true", help="Re-freeze existing baselines")
+
+    sub.add_parser("drift", help="Detect semantic drift vs the frozen baseline and raise alerts")
+
     return parser.parse_args(argv)
 
 
@@ -126,7 +144,7 @@ def main(argv=None, deps: Deps | None = None) -> int:
     args = _parse_args(argv)
     config = deps.load_config(args.config_dir)
 
-    if args.command in ("run", "dry-run", "score", "healthcheck", "serve"):
+    if args.command in ("run", "dry-run", "score", "healthcheck", "serve", "drift"):
         deps.validate_credentials(config, deps.env)
 
     if args.command == "import-questions":
@@ -193,6 +211,22 @@ def main(argv=None, deps: Deps | None = None) -> int:
             not_mentioned_threshold=args.not_mentioned_threshold,
         )
         deps.out(format_coverage_report(items))
+        return 0
+
+    if args.command == "baseline-freeze":
+        conn = _open_db(deps, config)
+        from datetime import datetime, timezone
+        n = deps.freeze_baseline(conn, now=datetime.now(timezone.utc).isoformat(), force=args.force)
+        deps.out(f"Froze {n} baseline(s).")
+        return 0
+
+    if args.command == "drift":
+        conn = _open_db(deps, config)
+        from datetime import datetime, timezone
+        client = deps.make_embedding_client(deps.env, config)
+        summary = deps.detect_drift(conn, client=client, config=config,
+                                    now=datetime.now(timezone.utc).isoformat())
+        deps.out(f"Drift: compared {summary.compared}, drifted {summary.drifted}.")
         return 0
 
     # run
