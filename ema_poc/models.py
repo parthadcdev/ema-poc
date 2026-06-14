@@ -58,6 +58,7 @@ class Question(BaseModel):
     active: bool = True
     approval_status: ApprovalStatus = ApprovalStatus.PENDING
     approver_name: str | None = None
+    source: str = "manual"
     created_at: datetime | None = None
     updated_at: datetime | None = None
     deleted_at: datetime | None = None

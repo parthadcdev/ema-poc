@@ -176,3 +176,34 @@ def test_init_schema_migrates_backfill_for_to_old_runs_table(tmp_path):
     # idempotent
     init_schema(conn)
     conn.close()
+
+
+def test_init_schema_migrates_source_to_old_questions_table(tmp_path):
+    """init_schema must ALTER source into a pre-existing questions table lacking it."""
+    import sqlite3 as _sqlite3
+
+    p = str(tmp_path / "old_questions.sqlite")
+    raw = _sqlite3.connect(p)
+    raw.execute(
+        "CREATE TABLE questions ("
+        "question_id TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1, "
+        "question_text TEXT NOT NULL, persona TEXT NOT NULL, "
+        "therapeutic_area TEXT, brand_focus TEXT, domain TEXT NOT NULL, "
+        "active INTEGER NOT NULL DEFAULT 1, "
+        "approval_status TEXT NOT NULL DEFAULT 'PENDING', "
+        "approver_name TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, "
+        "deleted_at TEXT, delete_reason TEXT, "
+        "PRIMARY KEY (question_id, version))"
+    )
+    raw.commit()
+    raw.close()
+
+    conn = connect(p)
+    init_schema(conn)  # should ALTER in source column
+
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(questions)")}
+    assert "source" in cols
+
+    # idempotent
+    init_schema(conn)
+    conn.close()
