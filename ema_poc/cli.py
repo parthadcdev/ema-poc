@@ -41,6 +41,10 @@ class Deps:
     load_reference_corpus: Callable | None = None
     compute_consensus: Callable | None = None
     generate_questions: Callable | None = None
+    list_questions: Callable | None = None
+    approve_question: Callable | None = None
+    reject_question: Callable | None = None
+    get_current: Callable | None = None
 
 
 def _make_scoring_client(env):
@@ -71,6 +75,12 @@ def default_deps() -> Deps:
     from ema_poc.hallucination.corpus import load_reference_corpus
     from ema_poc.consensus.compute import compute_consensus
     from ema_poc.suggest.pipeline import generate_and_store
+    from ema_poc.repositories.questions import (
+        list_questions,
+        approve_question,
+        reject_question,
+        get_current,
+    )
 
     def _serve_app(app, *, host, port):
         import uvicorn
@@ -104,6 +114,10 @@ def default_deps() -> Deps:
         load_reference_corpus=load_reference_corpus,
         compute_consensus=compute_consensus,
         generate_questions=generate_and_store,
+        list_questions=list_questions,
+        approve_question=approve_question,
+        reject_question=reject_question,
+        get_current=get_current,
     )
 
 
@@ -152,6 +166,20 @@ def _parse_args(argv):
 
     p_sug = sub.add_parser("suggest-questions", help="Propose new questions for coverage gaps (stored PENDING for Medical Affairs)")
     p_sug.add_argument("--count", type=int, default=10)
+
+    p_lq = sub.add_parser("list-questions", help="List questions for triage")
+    p_lq.add_argument("--pending", action="store_true", help="Only PENDING questions")
+    p_lq.add_argument("--source", default=None, help="Filter by source (e.g. generated)")
+    p_lq.add_argument("--persona", default=None)
+    p_lq.add_argument("--domain", default=None)
+
+    p_ap = sub.add_parser("approve", help="Approve a question (Medical Affairs)")
+    p_ap.add_argument("question_id")
+    p_ap.add_argument("--approver", default="Medical Affairs")
+
+    p_rj = sub.add_parser("reject", help="Reject a question (Medical Affairs)")
+    p_rj.add_argument("question_id")
+    p_rj.add_argument("--approver", default="Medical Affairs")
 
     return parser.parse_args(argv)
 
@@ -292,6 +320,35 @@ def main(argv=None, deps: Deps | None = None) -> int:
         for p in proposals:
             deps.out(f"  [{p.persona}/{p.domain}/{p.brand_focus}] {p.question_text}")
             deps.out(f"      rationale: {p.rationale}")
+        return 0
+
+    if args.command == "list-questions":
+        conn = _open_db(deps, config)
+        qs = deps.list_questions(
+            conn,
+            approval_status="PENDING" if args.pending else None,
+            persona=args.persona, domain=args.domain,
+        )
+        if args.source is not None:
+            qs = [q for q in qs if q.source == args.source]
+        deps.out(f"{len(qs)} question(s):")
+        for q in qs:
+            deps.out(
+                f"  {q.question_id} | {q.approval_status.value} | {q.source or '(none)'} | "
+                f"{q.persona.value}/{q.domain.value}/{q.brand_focus} | {q.question_text[:70]}"
+            )
+        return 0
+
+    if args.command in ("approve", "reject"):
+        conn = _open_db(deps, config)
+        if deps.get_current(conn, args.question_id) is None:
+            raise ConfigError(f"No such question: {args.question_id!r}")
+        if args.command == "approve":
+            deps.approve_question(conn, args.question_id, args.approver)
+            deps.out(f"Approved {args.question_id} (approver: {args.approver}).")
+        else:
+            deps.reject_question(conn, args.question_id, args.approver)
+            deps.out(f"Rejected {args.question_id} (approver: {args.approver}).")
         return 0
 
     # run

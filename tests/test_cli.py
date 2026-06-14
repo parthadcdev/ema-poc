@@ -555,3 +555,215 @@ def test_suggest_questions_validates_credentials():
     )
     main(["suggest-questions"], deps=deps)
     assert validated["called"] is True
+
+
+# ---------------------------------------------------------------------------
+# list-questions / approve / reject command tests (real DB)
+# ---------------------------------------------------------------------------
+
+def _real_deps(tmp_path, out_lines=None):
+    """Build a Deps that uses real DB functions against a tmp SQLite file."""
+    from ema_poc.db import connect, init_schema
+    from ema_poc.repositories.questions import (
+        list_questions as _lq,
+        approve_question as _aq,
+        reject_question as _rq,
+        get_current as _gc,
+    )
+    from ema_poc.config import AppConfig, Settings, BrandConfig
+
+    db_path = str(tmp_path / "ema.sqlite")
+    conn = connect(db_path)
+    init_schema(conn)
+
+    config = AppConfig(
+        settings=Settings(db_path=db_path),
+        brands=BrandConfig(),
+        targets=[],
+    )
+
+    if out_lines is None:
+        out_lines = []
+
+    deps = Deps(
+        load_config=lambda d: config,
+        connect=lambda p: conn,
+        init_schema=lambda c: None,
+        validate_credentials=lambda config, env: None,
+        build_adapters=lambda config, env: [],
+        make_scoring_client=lambda env: None,
+        run=lambda *a, **k: None,
+        score_pending=lambda *a, **k: None,
+        check_targets=lambda a: [],
+        import_csv=lambda conn, path: 0,
+        import_excel=lambda conn, path: 0,
+        env={},
+        out=out_lines.append,
+        list_questions=_lq,
+        approve_question=_aq,
+        reject_question=_rq,
+        get_current=_gc,
+    )
+    return deps, conn, out_lines
+
+
+def test_approve_sets_approved(tmp_path):
+    from ema_poc.models import ApprovalStatus
+    from ema_poc.repositories.questions import add_question, get_current
+
+    deps, conn, out = _real_deps(tmp_path)
+    add_question(conn, question_id="Q1", question_text="Is it effective?",
+                 persona="Provider", domain="Efficacy")
+
+    rc = main(["approve", "Q1"], deps=deps)
+    assert rc == 0
+
+    q = get_current(conn, "Q1")
+    assert q.approval_status is ApprovalStatus.APPROVED
+    assert q.approver_name == "Medical Affairs"
+
+
+def test_approve_custom_approver(tmp_path):
+    from ema_poc.repositories.questions import add_question, get_current
+
+    deps, conn, out = _real_deps(tmp_path)
+    add_question(conn, question_id="Q1", question_text="Is it effective?",
+                 persona="Provider", domain="Efficacy")
+
+    rc = main(["approve", "Q1", "--approver", "Dr X"], deps=deps)
+    assert rc == 0
+
+    q = get_current(conn, "Q1")
+    assert q.approver_name == "Dr X"
+
+
+def test_reject_sets_rejected(tmp_path):
+    from ema_poc.models import ApprovalStatus
+    from ema_poc.repositories.questions import add_question, get_current
+
+    deps, conn, out = _real_deps(tmp_path)
+    add_question(conn, question_id="Q1", question_text="Is it effective?",
+                 persona="Provider", domain="Efficacy")
+
+    rc = main(["reject", "Q1"], deps=deps)
+    assert rc == 0
+
+    q = get_current(conn, "Q1")
+    assert q.approval_status is ApprovalStatus.REJECTED
+
+
+def test_approve_missing_id_errors(tmp_path):
+    from ema_poc.repositories.questions import get_current
+
+    deps, conn, out = _real_deps(tmp_path)
+
+    with pytest.raises(ConfigError):
+        main(["approve", "NOPE"], deps=deps)
+
+    # nothing was written
+    assert get_current(conn, "NOPE") is None
+
+
+def test_reject_missing_id_errors(tmp_path):
+    from ema_poc.repositories.questions import get_current
+
+    deps, conn, out = _real_deps(tmp_path)
+
+    with pytest.raises(ConfigError):
+        main(["reject", "NOPE"], deps=deps)
+
+    # nothing was written
+    assert get_current(conn, "NOPE") is None
+
+
+def test_reject_custom_approver(tmp_path):
+    from ema_poc.models import ApprovalStatus
+    from ema_poc.repositories.questions import add_question, get_current
+
+    deps, conn, out = _real_deps(tmp_path)
+    add_question(conn, question_id="Q1", question_text="Is it effective?",
+                 persona="Provider", domain="Efficacy")
+
+    rc = main(["reject", "Q1", "--approver", "Dr X"], deps=deps)
+    assert rc == 0
+
+    q = get_current(conn, "Q1")
+    assert q.approval_status is ApprovalStatus.REJECTED
+    assert q.approver_name == "Dr X"
+
+
+def test_list_questions_pending_source_filter(tmp_path):
+    from ema_poc.models import ApprovalStatus
+    from ema_poc.repositories.questions import add_question, approve_question
+
+    deps, conn, out = _real_deps(tmp_path)
+
+    # PENDING generated
+    add_question(conn, question_id="GEN-1", question_text="Generated question?",
+                 persona="Provider", domain="Efficacy", source="generated")
+    # PENDING manual
+    add_question(conn, question_id="Q1", question_text="Manual question?",
+                 persona="Provider", domain="Efficacy", source="manual")
+    # APPROVED manual
+    add_question(conn, question_id="Q2", question_text="Approved question?",
+                 persona="Provider", domain="Efficacy", source="manual")
+    approve_question(conn, "Q2", "Medical Affairs")
+
+    rc = main(["list-questions", "--pending", "--source", "generated"], deps=deps)
+    assert rc == 0
+
+    full_output = "\n".join(out)
+    assert "GEN-1" in full_output
+    assert "Q1" not in full_output
+    assert "Q2" not in full_output
+    assert "1 question(s):" in full_output
+
+
+def test_list_questions_no_credentials_required(tmp_path):
+    """list-questions is a local DB op — must NOT trigger credential validation."""
+    validated = {"called": False}
+
+    def _validate(config, env):
+        validated["called"] = True
+
+    deps, conn, out = _real_deps(tmp_path)
+    deps.validate_credentials = _validate
+
+    main(["list-questions"], deps=deps)
+    assert validated["called"] is False
+
+
+def test_approve_no_credentials_required(tmp_path):
+    """approve is a local DB op — must NOT trigger credential validation."""
+    from ema_poc.repositories.questions import add_question
+
+    validated = {"called": False}
+
+    def _validate(config, env):
+        validated["called"] = True
+
+    deps, conn, out = _real_deps(tmp_path)
+    deps.validate_credentials = _validate
+    add_question(conn, question_id="Q1", question_text="Q?",
+                 persona="Provider", domain="Efficacy")
+
+    main(["approve", "Q1"], deps=deps)
+    assert validated["called"] is False
+
+
+def test_reject_no_credentials_required(tmp_path):
+    """reject is a local DB op — must NOT trigger credential validation."""
+    from ema_poc.repositories.questions import add_question
+
+    validated = {"called": False}
+
+    def _validate(config, env):
+        validated["called"] = True
+
+    deps, conn, out = _real_deps(tmp_path)
+    deps.validate_credentials = _validate
+    add_question(conn, question_id="Q1", question_text="Q?",
+                 persona="Provider", domain="Efficacy")
+
+    main(["reject", "Q1"], deps=deps)
+    assert validated["called"] is False
