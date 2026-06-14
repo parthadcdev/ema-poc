@@ -767,3 +767,103 @@ def test_reject_no_credentials_required(tmp_path):
 
     main(["reject", "Q1"], deps=deps)
     assert validated["called"] is False
+
+
+# ---------------------------------------------------------------------------
+# run-gaps command tests
+# ---------------------------------------------------------------------------
+
+def test_run_gaps_prints_report():
+    """run-gaps calls find_run_gaps and prints the formatted report."""
+    captured_kwargs = {}
+
+    def _fake_find_run_gaps(conn, **kw):
+        captured_kwargs.update(kw)
+        return ["2026-06-02"]
+
+    deps, out, calls = _fake_deps(find_run_gaps=_fake_find_run_gaps)
+    rc = main(["run-gaps", "--since", "2026-06-01", "--until", "2026-06-03"], deps=deps)
+
+    assert rc == 0
+    full_output = "\n".join(out)
+    assert "2026-06-02" in full_output
+    assert "Backfill each with" in full_output
+    assert captured_kwargs.get("start") == "2026-06-01"
+    assert captured_kwargs.get("end") == "2026-06-03"
+
+
+def test_run_gaps_default_until_is_today():
+    """Without --until, end defaults to today's UTC date."""
+    from datetime import datetime, timezone
+
+    captured_kwargs = {}
+
+    def _fake_find_run_gaps(conn, **kw):
+        captured_kwargs.update(kw)
+        return []
+
+    deps, out, calls = _fake_deps(find_run_gaps=_fake_find_run_gaps)
+    rc = main(["run-gaps", "--since", "2026-06-01"], deps=deps)
+
+    assert rc == 0
+    end = captured_kwargs.get("end")
+    assert end is not None
+    assert len(end) == 10
+    assert end == datetime.now(timezone.utc).date().isoformat()
+
+
+def test_run_gaps_invalid_since_errors():
+    """An invalid --since date raises ConfigError before find_run_gaps is called."""
+    called = {"find_run_gaps": False}
+
+    def _fake_find_run_gaps(conn, **kw):
+        called["find_run_gaps"] = True
+        return []
+
+    deps, out, calls = _fake_deps(find_run_gaps=_fake_find_run_gaps)
+    with pytest.raises(ConfigError):
+        main(["run-gaps", "--since", "nope"], deps=deps)
+    assert called["find_run_gaps"] is False
+
+
+def test_run_gaps_no_credentials_required():
+    """run-gaps is a local DB op — must NOT trigger credential validation."""
+    validated = {"called": False}
+
+    def _validate(config, env):
+        validated["called"] = True
+
+    deps, out, calls = _fake_deps(
+        validate_credentials=_validate,
+        find_run_gaps=lambda conn, **kw: [],
+    )
+    main(["run-gaps", "--since", "2026-06-01", "--until", "2026-06-03"], deps=deps)
+    assert validated["called"] is False
+
+
+def test_run_gaps_invalid_until_errors():
+    """An invalid --until date raises ConfigError before find_run_gaps is called."""
+    called = {"find_run_gaps": False}
+
+    def _fake_find_run_gaps(conn, **kw):
+        called["find_run_gaps"] = True
+        return []
+
+    deps, out, calls = _fake_deps(find_run_gaps=_fake_find_run_gaps)
+    with pytest.raises(ConfigError):
+        main(["run-gaps", "--since", "2026-06-01", "--until", "nope"], deps=deps)
+    assert called["find_run_gaps"] is False
+
+
+def test_run_gaps_inverted_range_errors():
+    """--since > --until raises ConfigError before find_run_gaps is called."""
+    called = {"find_run_gaps": False}
+
+    def _fake_find_run_gaps(conn, **kw):
+        called["find_run_gaps"] = True
+        return []
+
+    deps, out, calls = _fake_deps(find_run_gaps=_fake_find_run_gaps)
+    with pytest.raises(ConfigError):
+        main(["run-gaps", "--since", "2026-06-05", "--until", "2026-06-01"], deps=deps)
+    assert called["find_run_gaps"] is False
