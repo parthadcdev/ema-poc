@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 
 from ema_poc.config import ConfigError
 from ema_poc.coverage import format_coverage_report
@@ -45,6 +45,7 @@ class Deps:
     approve_question: Callable | None = None
     reject_question: Callable | None = None
     get_current: Callable | None = None
+    find_run_gaps: Callable | None = None
 
 
 def _make_scoring_client(env):
@@ -81,6 +82,7 @@ def default_deps() -> Deps:
         reject_question,
         get_current,
     )
+    from ema_poc.run_gaps import find_run_gaps
 
     def _serve_app(app, *, host, port):
         import uvicorn
@@ -118,6 +120,7 @@ def default_deps() -> Deps:
         approve_question=approve_question,
         reject_question=reject_question,
         get_current=get_current,
+        find_run_gaps=find_run_gaps,
     )
 
 
@@ -181,6 +184,10 @@ def _parse_args(argv):
     p_rj.add_argument("question_id")
     p_rj.add_argument("--approver", default="Medical Affairs")
 
+    p_gap = sub.add_parser("run-gaps", help="List dates with no completed run (to backfill)")
+    p_gap.add_argument("--since", required=True, help="Window start (YYYY-MM-DD)")
+    p_gap.add_argument("--until", default=None, help="Window end (YYYY-MM-DD, default today)")
+
     return parser.parse_args(argv)
 
 
@@ -220,7 +227,6 @@ def main(argv=None, deps: Deps | None = None) -> int:
 
     if args.command == "dashboard":
         conn = _open_db(deps, config)
-        from datetime import datetime, timezone
         path = deps.build_dashboard(
             conn, args.out,
             abbvie_brands=config.brands.abbvie_brands,
@@ -281,14 +287,12 @@ def main(argv=None, deps: Deps | None = None) -> int:
 
     if args.command == "baseline-freeze":
         conn = _open_db(deps, config)
-        from datetime import datetime, timezone
         n = deps.freeze_baseline(conn, now=datetime.now(timezone.utc).isoformat(), force=args.force)
         deps.out(f"Froze {n} baseline(s).")
         return 0
 
     if args.command == "drift":
         conn = _open_db(deps, config)
-        from datetime import datetime, timezone
         client = deps.make_embedding_client(deps.env, config)
         summary = deps.detect_drift(conn, client=client, config=config,
                                     now=datetime.now(timezone.utc).isoformat())
@@ -349,6 +353,19 @@ def main(argv=None, deps: Deps | None = None) -> int:
         else:
             deps.reject_question(conn, args.question_id, args.approver)
             deps.out(f"Rejected {args.question_id} (approver: {args.approver}).")
+        return 0
+
+    if args.command == "run-gaps":
+        from ema_poc.run_gaps import format_gaps_report
+        until = args.until or datetime.now(timezone.utc).date().isoformat()
+        for label, value in (("--since", args.since), ("--until", until)):
+            try:
+                date.fromisoformat(value)
+            except ValueError:
+                raise ConfigError(f"Invalid {label} date: {value!r} (expected YYYY-MM-DD)")
+        conn = _open_db(deps, config)
+        gaps = deps.find_run_gaps(conn, start=args.since, end=until)
+        deps.out(format_gaps_report(gaps, args.since, until))
         return 0
 
     # run
