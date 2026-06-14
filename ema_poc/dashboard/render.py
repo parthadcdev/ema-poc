@@ -1046,12 +1046,8 @@ def render_dashboard_html(dataset: dict) -> str:
 
     sections = (
         "<section id='view-overview' class='view active'></section>"
-        "<section id='view-marketing' class='view'>"
-        "<p>Marketing Analytics &mdash; coming soon.</p>"
-        "</section>"
-        "<section id='view-medical' class='view'>"
-        "<p>Medical Affairs &mdash; coming soon.</p>"
-        "</section>"
+        "<section id='view-marketing' class='view'></section>"
+        "<section id='view-medical' class='view'></section>"
         "<section id='view-responses' class='view'></section>"
     )
 

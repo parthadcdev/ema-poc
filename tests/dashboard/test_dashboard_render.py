@@ -393,15 +393,17 @@ def test_embedded_json_question_text_present(html):
 
 
 # ---------------------------------------------------------------------------
-# Placeholder sections for marketing / medical (static HTML, not JS-rendered)
+# Nav entries and section containers for marketing / medical
 # ---------------------------------------------------------------------------
 
-def test_marketing_placeholder_present(html):
-    assert "Marketing Analytics" in html
+def test_marketing_section_present(html):
+    assert "data-section='marketing'" in html or 'data-section="marketing"' in html
+    assert "id='view-marketing'" in html or 'id="view-marketing"' in html
 
 
-def test_medical_placeholder_present(html):
-    assert "Medical Affairs" in html
+def test_medical_section_present(html):
+    assert "data-section='medical'" in html or 'data-section="medical"' in html
+    assert "id='view-medical'" in html or 'id="view-medical"' in html
 
 
 # ---------------------------------------------------------------------------

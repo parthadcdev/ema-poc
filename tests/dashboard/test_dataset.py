@@ -107,15 +107,15 @@ def seeded(tmp_path):
     save_check(conn, response_id="resp-a", risk_level="HIGH",
                rationale="Contains speculative claims.", model="verifier-1", now=T1)
     save_flags(conn, response_id="resp-a", flags=[
-        {"claim": "Skyrizi cures all", "conflicts_with": "FDA label", "severity": "CRITICAL"},
-        {"claim": "No side effects", "conflicts_with": "clinical data", "severity": "MAJOR"},
+        {"claim": "Skyrizi cures all", "conflicts_with": "FDA label", "severity": "HIGH"},
+        {"claim": "No side effects", "conflicts_with": "clinical data", "severity": "MEDIUM"},
     ], now=T1)
 
     # Two alerts tied to score-a1
     save_alert(conn, Alert(alert_id="al-drift-1", score_id="score-a1",
-                           reason="DRIFT_DETECTED", created_at=T1))
+                           reason="DRIFT: cosine 0.80 < 0.85", created_at=T1))
     save_alert(conn, Alert(alert_id="al-sent-1", score_id="score-a1",
-                           reason="SENTIMENT_BELOW_THRESHOLD", created_at=T2))
+                           reason="sentiment -0.45 below -0.3 threshold", created_at=T2))
 
     # resp-b: scored, no hallucination check, no alerts
     _make_response(conn, "resp-b", ts=T2, llm_name="GPT-4o",
@@ -259,8 +259,8 @@ class TestHallucinationFields:
 
     def test_hallucination_flags_severities(self, record_a):
         flags = {f["claim"]: f for f in record_a["hallucination_flags"]}
-        assert flags["Skyrizi cures all"]["severity"] == "CRITICAL"
-        assert flags["No side effects"]["severity"] == "MAJOR"
+        assert flags["Skyrizi cures all"]["severity"] == "HIGH"
+        assert flags["No side effects"]["severity"] == "MEDIUM"
 
     def test_hallucination_flags_conflicts_with(self, record_a):
         flags = {f["claim"]: f for f in record_a["hallucination_flags"]}
@@ -280,14 +280,14 @@ class TestAlertFields:
 
     def test_alert_reasons_contains_both(self, record_a):
         reasons = record_a["alert_reasons"]
-        assert "DRIFT_DETECTED" in reasons
-        assert "SENTIMENT_BELOW_THRESHOLD" in reasons
+        assert any(r.startswith("DRIFT:") for r in reasons)
+        assert any("sentiment" in r and "threshold" in r for r in reasons)
 
     def test_alert_reasons_deterministic_order(self, record_a):
-        # DRIFT_DETECTED alert was inserted with created_at=T1, SENTIMENT with T2
+        # DRIFT alert was inserted with created_at=T1, sentiment alert with T2
         reasons = record_a["alert_reasons"]
-        assert reasons[0] == "DRIFT_DETECTED"
-        assert reasons[1] == "SENTIMENT_BELOW_THRESHOLD"
+        assert reasons[0] == "DRIFT: cosine 0.80 < 0.85"
+        assert reasons[1] == "sentiment -0.45 below -0.3 threshold"
 
     def test_no_alerts_for_scored_but_unalerted(self, seeded):
         result = collect_dataset(seeded, abbvie_brands=ABBVIE,
