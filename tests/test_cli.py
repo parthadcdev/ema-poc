@@ -241,3 +241,110 @@ def test_coverage_command_does_not_validate_credentials():
     )
     main(["coverage"], deps=deps)
     assert validated["called"] is False
+
+
+# ---------------------------------------------------------------------------
+# baseline-freeze command tests
+# ---------------------------------------------------------------------------
+
+def test_baseline_freeze_calls_freeze_and_prints_count():
+    """baseline-freeze calls freeze_baseline and prints the count."""
+    deps, out, _ = _fake_deps(
+        freeze_baseline=lambda conn, **k: 5,
+    )
+    rc = main(["baseline-freeze"], deps=deps)
+    assert rc == 0
+    assert any("5" in line for line in out)
+
+
+def test_baseline_freeze_forwards_force_flag():
+    """--force is forwarded to freeze_baseline as force=True."""
+    captured = {}
+
+    def _fake_freeze(conn, *, now, force=False):
+        captured["force"] = force
+        return 3
+
+    deps, out, _ = _fake_deps(freeze_baseline=_fake_freeze)
+    rc = main(["baseline-freeze", "--force"], deps=deps)
+    assert rc == 0
+    assert captured["force"] is True
+
+
+def test_baseline_freeze_without_force_passes_false():
+    """Without --force, force kwarg is False."""
+    captured = {}
+
+    def _fake_freeze(conn, *, now, force=False):
+        captured["force"] = force
+        return 2
+
+    deps, out, _ = _fake_deps(freeze_baseline=_fake_freeze)
+    rc = main(["baseline-freeze"], deps=deps)
+    assert rc == 0
+    assert captured["force"] is False
+
+
+def test_baseline_freeze_does_not_require_credentials():
+    """baseline-freeze is local/read-only — no credential validation needed."""
+    validated = {"called": False}
+
+    def _validate(config, env):
+        validated["called"] = True
+
+    deps, out, _ = _fake_deps(
+        validate_credentials=_validate,
+        freeze_baseline=lambda conn, **k: 0,
+        # Remove API keys to show credentials aren't checked
+        env={},
+    )
+    rc = main(["baseline-freeze"], deps=deps)
+    assert rc == 0
+    assert validated["called"] is False
+
+
+# ---------------------------------------------------------------------------
+# drift command tests
+# ---------------------------------------------------------------------------
+
+def test_drift_builds_client_and_calls_detect():
+    """drift calls make_embedding_client and detect_drift, prints compared/drifted."""
+    from types import SimpleNamespace
+
+    client_built = {}
+
+    def _make_client(env, config):
+        client_built["called"] = True
+        return object()
+
+    def _detect(conn, *, client, config, now):
+        return SimpleNamespace(compared=3, drifted=1)
+
+    deps, out, _ = _fake_deps(
+        make_embedding_client=_make_client,
+        detect_drift=_detect,
+    )
+    rc = main(["drift"], deps=deps)
+    assert rc == 0
+    assert client_built.get("called") is True
+    full_output = "\n".join(out)
+    assert "3" in full_output
+    assert "1" in full_output
+
+
+def test_drift_validates_credentials():
+    """drift is in the credential-validation tuple."""
+    validated = {"called": False}
+
+    def _validate(config, env):
+        validated["called"] = True
+
+    from types import SimpleNamespace
+
+    deps, out, _ = _fake_deps(
+        validate_credentials=_validate,
+        make_embedding_client=lambda env, config: object(),
+        detect_drift=lambda conn, **k: SimpleNamespace(compared=0, drifted=0),
+    )
+    main(["drift"], deps=deps)
+    assert validated["called"] is True

@@ -283,6 +283,28 @@ def detect_change(
     )
 
 
+def get_response(conn: sqlite3.Connection, response_id: str) -> Response | None:
+    """Fetch a single Response by primary key, or None if not found."""
+    row = conn.execute(
+        "SELECT * FROM responses WHERE response_id = ?", (response_id,)
+    ).fetchone()
+    return Response(**dict(row)) if row else None
+
+
+def latest_scored_response(
+    conn: sqlite3.Connection, question_id: str, llm_name: str
+) -> Response | None:
+    """The most recent response for a question/LLM pair that has been scored
+    (competitive_position IS NOT NULL), or None if no such response exists."""
+    row = conn.execute(
+        "SELECT * FROM responses WHERE question_id = ? AND llm_name = ? "
+        "AND competitive_position IS NOT NULL "
+        "ORDER BY timestamp_utc DESC, response_id DESC LIMIT 1",
+        (question_id, llm_name),
+    ).fetchone()
+    return Response(**dict(row)) if row else None
+
+
 def update_response_scoring(
     conn: sqlite3.Connection,
     response_id: str,

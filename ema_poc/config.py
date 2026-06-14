@@ -54,10 +54,17 @@ class BrandConfig(BaseModel):
     competitor_brands: list[str] = Field(default_factory=list)
 
 
+class DriftConfig(BaseModel):
+    embedding_model: str = "text-embedding-3-small"
+    embedding_api_key_env: str = "OPENAI_API_KEY"
+    cosine_threshold: float = 0.85
+
+
 class AppConfig(BaseModel):
     settings: Settings
     brands: BrandConfig
     targets: list[LLMTargetConfig]
+    drift: DriftConfig = Field(default_factory=DriftConfig)
 
 
 def load_config(config_dir: Path | str) -> AppConfig:
@@ -75,6 +82,7 @@ def load_config(config_dir: Path | str) -> AppConfig:
             settings=Settings(**settings_raw.get("settings", {})),
             brands=BrandConfig(**settings_raw.get("brands", {})),
             targets=[LLMTargetConfig(**t) for t in targets_raw.get("targets", [])],
+            drift=DriftConfig(**(settings_raw.get("drift", {}) or {})),
         )
     except ValidationError as exc:
         raise ConfigError(f"Invalid configuration: {exc}") from exc

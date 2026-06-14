@@ -149,6 +149,24 @@ CREATE TABLE IF NOT EXISTS sandbox_citations (
     FOREIGN KEY (sandbox_response_id) REFERENCES sandbox_responses(sandbox_response_id)
 );
 CREATE INDEX IF NOT EXISTS idx_sandbox_cit_resp ON sandbox_citations(sandbox_response_id);
+
+CREATE TABLE IF NOT EXISTS response_embeddings (
+    response_id  TEXT PRIMARY KEY,
+    model        TEXT NOT NULL,
+    vector       TEXT NOT NULL,
+    created_at   TEXT NOT NULL,
+    FOREIGN KEY (response_id) REFERENCES responses(response_id)
+);
+
+CREATE TABLE IF NOT EXISTS drift_baselines (
+    question_id          TEXT NOT NULL,
+    llm_name             TEXT NOT NULL,
+    response_id          TEXT NOT NULL,
+    competitive_position TEXT,
+    frozen_at            TEXT NOT NULL,
+    PRIMARY KEY (question_id, llm_name),
+    FOREIGN KEY (response_id) REFERENCES responses(response_id)
+);
 """
 
 
@@ -158,6 +176,7 @@ _ADDITIVE_COLUMNS: list[tuple[str, str, str]] = [
     ("responses", "provenance", "TEXT"),
     ("scores", "confidence_level", "TEXT"),
     ("scores", "citation_quality", "TEXT"),
+    ("drift_baselines", "competitive_position", "TEXT"),
 ]
 
 
