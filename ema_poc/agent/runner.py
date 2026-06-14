@@ -39,6 +39,7 @@ class RunSummary:
     failure_count: int
     total_tokens: int
     est_cost: float
+    backfill_for: str | None = None
 
 
 def _now_iso() -> str:
@@ -60,13 +61,14 @@ def run(
     rate_limiters: dict | None = None,
     sleep=time.sleep,
     max_workers: int | None = None,
+    backfill_for: str | None = None,
 ) -> RunSummary:
     started = now_factory()
     if run_id is None:
         run_id = id_factory()
-        create_run(conn, run_id, started_at=started)
+        create_run(conn, run_id, started_at=started, backfill_for=backfill_for)
     elif get_run(conn, run_id) is None:
-        create_run(conn, run_id, started_at=started)
+        create_run(conn, run_id, started_at=started, backfill_for=backfill_for)
 
     if rate_limiters is None:
         rate_limiters = {
@@ -201,4 +203,5 @@ def run(
         failure_count=failure_count,
         total_tokens=total_tokens,
         est_cost=est_cost,
+        backfill_for=get_run(conn, run_id).backfill_for,
     )

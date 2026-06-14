@@ -387,3 +387,41 @@ def test_resume_fills_missing_sample(tmp_path):
     assert len(rows) == 2
     assert {r[0] for r in rows} == {0, 1}
     conn.close()
+
+
+def test_backfill_for_stored_and_returned_in_summary(tmp_path):
+    """run() with backfill_for stores the tag in the DB and returns it in the summary."""
+    conn = _conn(tmp_path)
+    add_question(conn, question_id="Q1", question_text="a", persona="Provider",
+                 domain="Safety", now=NOW)
+    approve_question(conn, "Q1", approver_name="R", now=NOW)
+
+    resp = LLMResponse("ans", "stop", "SUCCESS", prompt_tokens=1, completion_tokens=1)
+    adapter = _Adapter("GPT-4o", resp)
+    cfg = _config(["GPT-4o"], samples_per_question=1)
+
+    summary = run(conn, [adapter], cfg, run_id="run-bf", id_factory=_ids(),
+                  now_factory=lambda: NOW, rate_limiters={}, sleep=lambda d: None,
+                  backfill_for="2026-06-10")
+
+    assert get_run(conn, "run-bf").backfill_for == "2026-06-10"
+    assert summary.backfill_for == "2026-06-10"
+    conn.close()
+
+
+def test_no_backfill_for_returns_none_in_summary(tmp_path):
+    """run() without backfill_for stores None in the DB and returns None in the summary."""
+    conn = _conn(tmp_path)
+    add_question(conn, question_id="Q1", question_text="a", persona="Provider",
+                 domain="Safety", now=NOW)
+    approve_question(conn, "Q1", approver_name="R", now=NOW)
+
+    resp = LLMResponse("ans", "stop", "SUCCESS", prompt_tokens=1, completion_tokens=1)
+    adapter = _Adapter("GPT-4o", resp)
+    cfg = _config(["GPT-4o"], samples_per_question=1)
+
+    summary = run(conn, [adapter], cfg, run_id="run-nobf", id_factory=_ids(),
+                  now_factory=lambda: NOW, rate_limiters={}, sleep=lambda d: None)
+
+    assert summary.backfill_for is None
+    conn.close()
