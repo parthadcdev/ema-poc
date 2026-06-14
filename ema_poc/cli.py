@@ -168,7 +168,13 @@ def main(argv=None, deps: Deps | None = None) -> int:
 
     if args.command == "dashboard":
         conn = _open_db(deps, config)
-        path = deps.build_dashboard(conn, args.out)
+        from datetime import datetime, timezone
+        path = deps.build_dashboard(
+            conn, args.out,
+            abbvie_brands=config.brands.abbvie_brands,
+            competitor_brands=config.brands.competitor_brands,
+            now=datetime.now(timezone.utc).isoformat(),
+        )
         deps.out(f"Dashboard written to {path}")
         return 0
 
