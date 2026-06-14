@@ -152,6 +152,22 @@ CREATE INDEX IF NOT EXISTS idx_sandbox_cit_resp ON sandbox_citations(sandbox_res
 """
 
 
+# (additive, nullable) columns introduced after initial release; ALTER-added
+# if a pre-existing DB lacks them. All nullable / no default → safe to add.
+_ADDITIVE_COLUMNS: list[tuple[str, str, str]] = [
+    ("responses", "provenance", "TEXT"),
+    ("scores", "confidence_level", "TEXT"),
+    ("scores", "citation_quality", "TEXT"),
+]
+
+
+def _migrate_additive_columns(conn: sqlite3.Connection) -> None:
+    for table, column, coltype in _ADDITIVE_COLUMNS:
+        cols = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
+
+
 def connect(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -161,4 +177,5 @@ def connect(db_path: str) -> sqlite3.Connection:
 
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    _migrate_additive_columns(conn)
     conn.commit()
