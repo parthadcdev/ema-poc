@@ -33,6 +33,7 @@ def build_response(
     now: str,
     response_id: str,
     system_prompt: str = "",
+    sample_index: int = 0,
 ) -> Response:
     """Construct a Response row from a question, the adapter that answered, and
     the normalized LLMResponse. sentiment_score/competitive_position stay null
@@ -63,6 +64,7 @@ def build_response(
         response_text=llm_response.text,
         response_tokens=llm_response.completion_tokens,
         finish_reason=llm_response.finish_reason,
+        sample_index=sample_index,
         status=llm_response.status,
         alert_triggered=False,
         created_at=now,
@@ -76,10 +78,10 @@ def save_response(conn: sqlite3.Connection, response: Response) -> None:
         INSERT INTO responses (
             response_id, run_id, timestamp_utc, llm_name, llm_model_version,
             persona, question_id, question_text, therapeutic_area, brand_focus,
-            domain, response_text, response_tokens, finish_reason, status,
-            sentiment_score, competitive_position, alert_triggered, created_at,
-            provenance
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            domain, response_text, response_tokens, finish_reason, sample_index,
+            status, sentiment_score, competitive_position, alert_triggered,
+            created_at, provenance
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             response.response_id,
@@ -96,6 +98,7 @@ def save_response(conn: sqlite3.Connection, response: Response) -> None:
             response.response_text,
             response.response_tokens,
             response.finish_reason,
+            response.sample_index,
             response.status.value,
             response.sentiment_score,
             response.competitive_position.value
@@ -109,15 +112,16 @@ def save_response(conn: sqlite3.Connection, response: Response) -> None:
     conn.commit()
 
 
-def completed_keys(conn: sqlite3.Connection, run_id: str) -> set[tuple[str, str]]:
-    """(question_id, llm_name) pairs already captured for this run (status !=
-    FAILED). Used to resume a run without re-submitting completed work."""
+def completed_keys(conn: sqlite3.Connection, run_id: str) -> set[tuple[str, str, int]]:
+    """(question_id, llm_name, sample_index) triples already captured for this
+    run (status != FAILED). Used to resume a run without re-submitting
+    completed work."""
     rows = conn.execute(
-        "SELECT DISTINCT question_id, llm_name FROM responses "
+        "SELECT DISTINCT question_id, llm_name, sample_index FROM responses "
         "WHERE run_id = ? AND status != 'FAILED'",
         (run_id,),
     ).fetchall()
-    return {(r["question_id"], r["llm_name"]) for r in rows}
+    return {(r["question_id"], r["llm_name"], r["sample_index"]) for r in rows}
 
 
 def _enum_value(x):

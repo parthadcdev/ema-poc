@@ -35,7 +35,7 @@ CSV = (
 def _config():
     return AppConfig(
         settings=Settings(db_path="unused", system_prompts={"default": "ctx"},
-                          scoring_model="claude-opus-4-8"),
+                          scoring_model="claude-opus-4-8", samples_per_question=1),
         brands=BrandConfig(abbvie_brands=["Skyrizi"], competitor_brands=["Humira"]),
         targets=[],
     )

@@ -407,3 +407,40 @@ def test_check_hallucinations_validates_credentials():
     )
     main(["check-hallucinations"], deps=deps)
     assert validated["called"] is True
+
+
+# ---------------------------------------------------------------------------
+# consensus command tests
+# ---------------------------------------------------------------------------
+
+def test_consensus_runs_and_prints_summary():
+    """consensus calls compute_consensus and prints groups + alerts_raised."""
+    from types import SimpleNamespace
+
+    deps, out, _ = _fake_deps(
+        compute_consensus=lambda conn: SimpleNamespace(groups=12, alerts_raised=2),
+    )
+    rc = main(["consensus"], deps=deps)
+    assert rc == 0
+    full_output = "\n".join(out)
+    assert "12" in full_output
+    assert "2" in full_output
+
+
+def test_consensus_no_credentials_required():
+    """consensus is pure local computation — must NOT trigger credential validation."""
+    from types import SimpleNamespace
+
+    validated = {"called": False}
+
+    def _validate(config, env):
+        validated["called"] = True
+
+    deps, out, _ = _fake_deps(
+        validate_credentials=_validate,
+        compute_consensus=lambda conn: SimpleNamespace(groups=0, alerts_raised=0),
+        env={},
+    )
+    rc = main(["consensus"], deps=deps)
+    assert rc == 0
+    assert validated["called"] is False

@@ -140,3 +140,32 @@ def test_target_grounded_defaults_false_and_parses_true():
         rate_limit={"requests_per_minute": 1, "tokens_per_minute": 1},
     )
     assert t2.grounded is True
+
+
+# ---------------------------------------------------------------------------
+# samples_per_question tests (triple-run consensus groundwork)
+# ---------------------------------------------------------------------------
+
+def test_settings_samples_per_question_default():
+    """Settings() without yaml override defaults samples_per_question to 3."""
+    from ema_poc.config import Settings
+    s = Settings()
+    assert s.samples_per_question == 3
+
+
+def test_load_config_samples_per_question_override(tmp_path: Path):
+    """samples_per_question can be overridden via settings.yaml."""
+    (tmp_path / "settings.yaml").write_text(
+        "settings:\n  db_path: x.sqlite\n  samples_per_question: 5\n"
+    )
+    (tmp_path / "llm_targets.yaml").write_text("targets: []\n")
+    cfg = load_config(tmp_path)
+    assert cfg.settings.samples_per_question == 5
+
+
+def test_load_config_samples_per_question_absent_uses_default(tmp_path: Path):
+    """When samples_per_question is absent from yaml the default (3) is used."""
+    (tmp_path / "settings.yaml").write_text("settings:\n  db_path: x.sqlite\n")
+    (tmp_path / "llm_targets.yaml").write_text("targets: []\n")
+    cfg = load_config(tmp_path)
+    assert cfg.settings.samples_per_question == 3
