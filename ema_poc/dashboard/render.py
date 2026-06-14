@@ -1,16 +1,22 @@
-"""Render DashboardData into one self-contained HTML document (FR-601/603/604/605).
+"""Render a client-side audience dashboard from a dataset dict (FR-audience-dashboard).
 
-Charts are inline CSS bars / HTML tables (no JS chart library, no external
-resources, no remote fonts). All dynamic content is HTML-escaped. Filtering and
-row expansion use small inline vanilla JS. The visual language is a refined
-"clinical intelligence report": warm parchment surface, petrol-ink serif
-headings, a diverging sentiment scale, and colour-coded status/position chips."""
+`render_dashboard_html(dataset: dict) -> str`
+
+Returns a single self-contained HTML string: no external scripts, no external
+stylesheets, no remote fonts.  The full dataset is embedded as JSON inside a
+<script type="application/json"> tag; all filtering, navigation, and rendering
+is handled by inline vanilla JS."""
 
 from __future__ import annotations
 
 import html
+import json
 
-from ema_poc.dashboard.data import DashboardData
+
+def _e(value) -> str:
+    """HTML-escape a value (None -> empty string)."""
+    return html.escape("" if value is None else str(value))
+
 
 _CSS = """<style>
 :root{
@@ -24,356 +30,531 @@ _CSS = """<style>
   --serif:"Iowan Old Style","Hoefler Text",Georgia,"Times New Roman",serif;
   --sans:ui-sans-serif,-apple-system,"Helvetica Neue",Helvetica,Arial,sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --nav-w:210px;
 }
 *{box-sizing:border-box}
 html{-webkit-font-smoothing:antialiased}
 body{
   font-family:var(--sans); color:var(--ink); margin:0; line-height:1.5;
-  background:
-    radial-gradient(900px 500px at 88% -8%, rgba(31,92,77,.07), transparent 60%),
-    radial-gradient(700px 600px at -5% 110%, rgba(159,58,47,.05), transparent 55%),
-    var(--paper);
-  background-attachment:fixed;
+  background:var(--paper); display:flex; min-height:100vh;
 }
-.wrap{max-width:1180px; margin:0 auto; padding:2.6rem 1.6rem 4rem}
 
-/* Masthead */
-.masthead{border-bottom:2px solid var(--ink); padding-bottom:1.1rem; margin-bottom:1.8rem}
-.kicker{font-family:var(--mono); font-size:11px; letter-spacing:.28em; text-transform:uppercase;
-  color:var(--accent); margin:0 0 .5rem}
-.masthead h1{font-family:var(--serif); font-weight:600; font-size:clamp(2rem,4.4vw,3.1rem);
-  line-height:1.02; letter-spacing:-.015em; margin:0}
-.masthead .sub{font-family:var(--serif); font-style:italic; color:var(--ink-soft);
-  font-size:1.05rem; margin:.45rem 0 0}
+/* ---- Side-nav ---- */
+.sidenav{
+  width:var(--nav-w); min-width:var(--nav-w); max-width:var(--nav-w);
+  background:var(--accent-deep); position:fixed; top:0; left:0;
+  height:100vh; overflow-y:auto; display:flex; flex-direction:column;
+  z-index:10;
+}
+.sidenav .nav-brand{
+  padding:1.2rem 1.1rem .9rem; border-bottom:1px solid rgba(255,255,255,.1);
+}
+.sidenav .nav-brand .kicker{
+  font-family:var(--mono); font-size:9px; letter-spacing:.28em;
+  text-transform:uppercase; color:rgba(255,255,255,.55); margin:0 0 .25rem;
+}
+.sidenav .nav-brand .brand-title{
+  font-family:var(--serif); font-size:1.05rem; color:#f2efe6; line-height:1.2;
+}
+.sidenav ul{list-style:none; margin:0; padding:.6rem 0}
+.sidenav ul li a{
+  display:block; padding:.62rem 1.1rem; color:rgba(255,255,255,.75);
+  text-decoration:none; font-size:13px; font-family:var(--sans);
+  letter-spacing:.01em; border-left:3px solid transparent;
+  transition:background .15s, color .15s;
+}
+.sidenav ul li a:hover{
+  background:rgba(255,255,255,.08); color:#fff;
+}
+.sidenav ul li a.active{
+  background:rgba(255,255,255,.13); color:#fff;
+  border-left-color:#7ecab0; font-weight:600;
+}
 
-/* Stat tiles */
-.tiles{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1px;
-  background:var(--rule); border:1px solid var(--rule); margin:1.8rem 0 2.4rem}
-.tile{background:var(--surface); padding:1rem 1.1rem}
-.tile .lab{font-family:var(--mono); font-size:10.5px; letter-spacing:.16em; text-transform:uppercase;
-  color:var(--ink-faint); margin:0 0 .35rem}
-.tile .num{font-family:var(--serif); font-size:2rem; line-height:1; font-weight:600}
-.tile .num.pos{color:var(--pos)} .tile .num.neg{color:var(--neg)} .tile .num.neu{color:var(--neu)}
+/* ---- Main area ---- */
+.main-wrap{
+  margin-left:var(--nav-w); flex:1; display:flex; flex-direction:column;
+  min-height:100vh;
+}
+
+/* ---- Global header + filter bar ---- */
+.top-bar{
+  background:var(--surface); border-bottom:1px solid var(--rule);
+  padding:.9rem 1.6rem; position:sticky; top:0; z-index:5;
+  box-shadow:0 1px 8px -4px rgba(20,40,33,.18);
+}
+.top-bar h1{
+  font-family:var(--serif); font-size:1.35rem; font-weight:600;
+  letter-spacing:-.01em; color:var(--ink); margin:0 0 .7rem;
+}
+.filter-bar{
+  display:flex; flex-wrap:wrap; gap:.6rem .9rem; align-items:flex-end;
+}
+.filter-bar label{
+  display:flex; flex-direction:column; gap:.2rem;
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--ink-faint);
+}
+.filter-bar select,.filter-bar input[type=date]{
+  font-family:var(--sans); font-size:12px; color:var(--ink);
+  padding:.28rem .45rem; border:1px solid var(--rule); border-radius:2px;
+  background:var(--surface); min-width:110px;
+}
+.filter-bar select:focus,.filter-bar input:focus{
+  outline:none; border-color:var(--accent);
+  box-shadow:0 0 0 2px rgba(31,92,77,.13);
+}
+#f-reset{
+  font-family:var(--mono); font-size:11px; letter-spacing:.06em;
+  text-transform:uppercase; cursor:pointer; padding:.3rem .8rem;
+  border:1px solid var(--rule); border-radius:2px; background:var(--surface-2);
+  color:var(--ink-soft); align-self:flex-end;
+}
+#f-reset:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ---- Content area ---- */
+.content{padding:1.6rem; flex:1}
+section.view{display:none}
+section.view.active{display:block}
+
+/* ---- Stat tiles ---- */
+.tiles{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+  gap:1px; background:var(--rule); border:1px solid var(--rule);
+  margin:0 0 1.8rem; border-radius:2px; overflow:hidden;
+}
+.tile{background:var(--surface); padding:.9rem 1rem}
+.tile .lab{
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--ink-faint); margin:0 0 .3rem;
+}
+.tile .num{
+  font-family:var(--serif); font-size:1.9rem; line-height:1; font-weight:600;
+}
 .tile.flag .num{color:var(--neg)}
+.tile.warn .num{color:var(--neu)}
 
-/* Sections */
-.section{background:var(--surface); border:1px solid var(--rule); border-radius:2px;
-  padding:1.5rem 1.6rem; margin:0 0 1.5rem;
-  box-shadow:0 1px 0 rgba(20,40,33,.03), 0 14px 30px -26px rgba(20,40,33,.5);
-  opacity:0; transform:translateY(10px); animation:rise .55s cubic-bezier(.2,.7,.2,1) forwards}
-.section:nth-child(2){animation-delay:.04s}.section:nth-child(3){animation-delay:.08s}
-.section:nth-child(4){animation-delay:.12s}.section:nth-child(5){animation-delay:.16s}
-.section:nth-child(6){animation-delay:.20s}.section:nth-child(7){animation-delay:.24s}
-@keyframes rise{to{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){.section{animation:none;opacity:1;transform:none}}
-.section>h2{font-family:var(--serif); font-weight:600; font-size:1.3rem; letter-spacing:-.01em;
-  margin:0 0 .2rem; display:flex; align-items:baseline; gap:.6rem}
-.section>h2 .idx{font-family:var(--mono); font-size:11px; color:var(--accent);
-  letter-spacing:.1em; transform:translateY(-2px)}
-.section>.hint{color:var(--ink-faint); font-size:12.5px; margin:.1rem 0 1.1rem}
+/* ---- Cards / sections ---- */
+.card{
+  background:var(--surface); border:1px solid var(--rule); border-radius:2px;
+  padding:1.2rem 1.4rem; margin:0 0 1.2rem;
+  box-shadow:0 1px 0 rgba(20,40,33,.03),0 10px 24px -20px rgba(20,40,33,.45);
+}
+.card h2{
+  font-family:var(--serif); font-weight:600; font-size:1.2rem;
+  letter-spacing:-.01em; margin:0 0 .8rem; color:var(--ink);
+}
+.card .hint{
+  color:var(--ink-faint); font-size:12px; margin:-.4rem 0 .8rem;
+  font-family:var(--mono); letter-spacing:.04em;
+}
 
-/* Diverging + magnitude bars */
-.chart{display:flex; flex-direction:column; gap:.5rem; margin-top:.4rem}
-.brow{display:grid; grid-template-columns:185px 1fr 64px; align-items:center; gap:.7rem}
-.brow .lab{font-size:13px; color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.brow .val{font-family:var(--mono); font-size:12px; color:var(--ink-soft); text-align:right}
-.track{position:relative; height:18px; background:
-  linear-gradient(var(--rule-soft),var(--rule-soft)) center/100% 1px no-repeat, var(--surface-2);
-  border-radius:2px}
-.track.div::before{content:""; position:absolute; left:50%; top:-2px; bottom:-2px; width:1px;
-  background:var(--ink-faint); opacity:.55}
-.fill{position:absolute; top:3px; bottom:3px; border-radius:2px;
-  background:linear-gradient(180deg, var(--accent), var(--accent-deep))}
-.fill.pos{background:linear-gradient(180deg,#3a9069,#256249)}
-.fill.neg{background:linear-gradient(180deg,#b3473a,#7e2b22)}
-
-/* Tables */
+/* ---- Tables ---- */
 .tbl-wrap{overflow:auto; border:1px solid var(--rule); border-radius:2px; max-height:560px}
 table{border-collapse:collapse; width:100%; font-size:13px}
-thead th{position:sticky; top:0; z-index:2; background:var(--accent-deep); color:#f2efe6;
-  font-family:var(--mono); font-weight:500; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase;
-  text-align:left; padding:.6rem .75rem; white-space:nowrap}
-tbody td{border-bottom:1px solid var(--rule-soft); padding:.5rem .75rem; vertical-align:top}
-tbody tr:nth-child(4n+1) td, tbody tr:nth-child(4n+2) td{background:rgba(255,255,255,.45)}
-.pos-tbl tbody tr:hover td{background:var(--surface-2)}
-td.num{font-family:var(--mono); text-align:right; color:var(--ink-soft)}
-td.qid strong{font-family:var(--mono); font-size:11.5px; color:var(--accent)}
+thead th{
+  position:sticky; top:0; z-index:2; background:var(--accent-deep); color:#f2efe6;
+  font-family:var(--mono); font-weight:500; font-size:10px; letter-spacing:.12em;
+  text-transform:uppercase; text-align:left; padding:.55rem .7rem; white-space:nowrap;
+}
+tbody td{
+  border-bottom:1px solid var(--rule-soft); padding:.45rem .7rem; vertical-align:top;
+}
+tbody tr:nth-child(4n+1) td,tbody tr:nth-child(4n+2) td{background:rgba(255,255,255,.45)}
 .t-time{font-family:var(--mono); font-size:11px; color:var(--ink-faint); white-space:nowrap}
+td.qid strong{font-family:var(--mono); font-size:11px; color:var(--accent)}
 
-/* Chips */
-.chip{display:inline-block; font-family:var(--mono); font-size:10.5px; letter-spacing:.04em;
-  padding:.16rem .5rem; border-radius:999px; border:1px solid transparent; white-space:nowrap}
-.c-pos{background:var(--pos-soft); color:#1f5a3e; border-color:#bcd9c5}
-.c-neu{background:var(--neu-soft); color:#7c5908; border-color:#e4d2a6}
-.c-neg{background:var(--neg-soft); color:#86281d; border-color:#e3c2b8}
-.c-mut{background:var(--surface-2); color:var(--ink-faint); border-color:var(--rule)}
-.sent{font-family:var(--mono); font-weight:600; font-size:12.5px}
+/* ---- Chips ---- */
+.chip{
+  display:inline-block; font-family:var(--mono); font-size:10px;
+  letter-spacing:.03em; padding:.14rem .45rem; border-radius:999px;
+  border:1px solid transparent; white-space:nowrap;
+}
+.c-pos{background:var(--pos-soft);color:#1f5a3e;border-color:#bcd9c5}
+.c-neu{background:var(--neu-soft);color:#7c5908;border-color:#e4d2a6}
+.c-neg{background:var(--neg-soft);color:#86281d;border-color:#e3c2b8}
+.c-mut{background:var(--surface-2);color:var(--ink-faint);border-color:var(--rule)}
+.c-high{background:#fde8e8;color:#7a1f1f;border-color:#f0bebe}
+.sent{font-family:var(--mono); font-weight:600; font-size:12px}
 .sent.pos{color:var(--pos)} .sent.neu{color:var(--neu)} .sent.neg{color:var(--neg)}
 
-/* Responses interaction */
+/* ---- Expandable response rows ---- */
 tr.resp{cursor:pointer; transition:background .12s}
 tr.resp:hover td{background:var(--surface-2)}
 tr.resp td:first-child{border-left:3px solid transparent}
 tr.resp.flagged td:first-child{border-left-color:var(--neg)}
-tr.detail td{background:#fffdf7; border-left:3px solid var(--accent)}
-.detail-grid{display:grid; gap:.7rem; padding:.3rem .1rem .5rem}
-.detail-grid .dl{font-family:var(--mono); font-size:9.5px; letter-spacing:.14em; text-transform:uppercase;
-  color:var(--ink-faint); margin-bottom:.2rem}
-.detail-grid .dv{font-size:13px; white-space:pre-wrap; line-height:1.55}
+tr.detail td{background:#fffdf7;border-left:3px solid var(--accent)}
+.detail-grid{display:grid;gap:.7rem;padding:.3rem .1rem .5rem}
+.detail-grid .dl{
+  font-family:var(--mono);font-size:9px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-faint);margin-bottom:.18rem;
+}
+.detail-grid .dv{font-size:13px;white-space:pre-wrap;line-height:1.55}
 
-/* Filters */
-.controls{display:flex; flex-wrap:wrap; gap:.8rem 1rem; align-items:flex-end; margin:0 0 1.1rem}
-.controls label{display:flex; flex-direction:column; gap:.25rem; font-family:var(--mono);
-  font-size:9.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-faint)}
-.controls select,.controls input{font-family:var(--sans); font-size:13px; color:var(--ink);
-  padding:.34rem .5rem; border:1px solid var(--rule); border-radius:2px; background:var(--surface)}
-.controls select:focus,.controls input:focus{outline:none; border-color:var(--accent);
-  box-shadow:0 0 0 2px rgba(31,92,77,.13)}
+/* ---- Alerts list ---- */
+.alert-item{
+  border-left:3px solid var(--neg); padding:.4rem .75rem;
+  margin:.4rem 0; background:rgba(159,58,47,.04); border-radius:0 2px 2px 0;
+  font-size:13px;
+}
+.alert-item .a-id{font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
+.alert-item .a-reasons{color:var(--neg);font-size:12px;margin-top:.18rem}
 
-/* Alerts */
-.alert-row td:first-child{font-family:var(--mono); font-size:11px}
-.alert-reason{color:var(--neg); font-weight:600}
-.empty{color:var(--ink-faint); font-style:italic; font-family:var(--serif); margin:.3rem 0}
-footer{margin-top:2.4rem; padding-top:1rem; border-top:1px solid var(--rule);
-  font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint)}
+/* ---- Empty state ---- */
+.empty{color:var(--ink-faint);font-style:italic;font-family:var(--serif);margin:.3rem 0}
+
+/* ---- Placeholder section ---- */
+.placeholder{
+  border:2px dashed var(--rule); border-radius:4px; padding:2.5rem;
+  text-align:center; color:var(--ink-faint); margin:1rem 0;
+}
+.placeholder p{font-family:var(--serif); font-size:1.05rem; font-style:italic; margin:0}
+
+footer{
+  margin-top:auto; padding:1rem 1.6rem; border-top:1px solid var(--rule);
+  font-family:var(--mono); font-size:10px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--ink-faint);
+}
 </style>"""
 
-_JS = """<script>
-function applyFilters(){
-  var p=document.getElementById('f-persona').value;
-  var t=document.getElementById('f-ta').value;
-  var l=document.getElementById('f-llm').value;
-  var df=document.getElementById('f-from').value;
-  var dt=document.getElementById('f-to').value;
-  document.querySelectorAll('tr.resp').forEach(function(row){
-    var d=row.dataset;
-    var show=(!p||d.persona===p)&&(!t||d.ta===t)&&(!l||d.llm===l)&&(!df||d.date>=df)&&(!dt||d.date<=dt);
-    row.style.display=show?'':'none';
-    var det=row.nextElementSibling;
-    if(det&&det.classList.contains('detail')) det.style.display='none';
+
+_JS = r"""<script>
+(function(){
+
+/* ---- Bootstrap ---- */
+const DATA = JSON.parse(document.getElementById('ema-data').textContent);
+
+function esc(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
   });
 }
-document.addEventListener('DOMContentLoaded',function(){
-  document.querySelectorAll('.controls select,.controls input').forEach(function(el){
-    el.addEventListener('change',applyFilters); el.addEventListener('input',applyFilters);
+
+/* ---- Populate filter selects ---- */
+function distinct(field){
+  const s = new Set();
+  DATA.records.forEach(function(r){ if(r[field]) s.add(r[field]); });
+  return Array.from(s).sort();
+}
+
+function populate(id, values){
+  const sel = document.getElementById(id);
+  values.forEach(function(v){
+    const o = document.createElement('option');
+    o.value = v; o.textContent = v;
+    sel.appendChild(o);
   });
-  document.querySelectorAll('tr.resp').forEach(function(row){
-    row.addEventListener('click',function(){
-      var det=row.nextElementSibling;
-      if(det&&det.classList.contains('detail'))
-        det.style.display=(!det.style.display||det.style.display==='none')?'table-row':'none';
+}
+
+populate('f-ta',      distinct('therapeutic_area'));
+populate('f-brand',   distinct('brand_focus'));
+populate('f-llm',     distinct('llm_name'));
+populate('f-persona', distinct('persona'));
+
+/* ---- State ---- */
+const STATE = { section: 'overview', filters: {} };
+
+/* ---- Filter engine ---- */
+function applyFilters(){
+  const ta      = document.getElementById('f-ta').value;
+  const brand   = document.getElementById('f-brand').value;
+  const llm     = document.getElementById('f-llm').value;
+  const persona = document.getElementById('f-persona').value;
+  const from    = document.getElementById('f-from').value;
+  const to      = document.getElementById('f-to').value;
+  return DATA.records.filter(function(r){
+    if(ta      && r.therapeutic_area !== ta)    return false;
+    if(brand   && r.brand_focus      !== brand) return false;
+    if(llm     && r.llm_name         !== llm)   return false;
+    if(persona && r.persona          !== persona) return false;
+    if(from    && r.date < from)                return false;
+    if(to      && r.date > to)                  return false;
+    return true;
+  });
+}
+
+/* ---- Nav ---- */
+document.querySelectorAll('.sidenav a[data-section]').forEach(function(link){
+  link.addEventListener('click', function(e){
+    e.preventDefault();
+    STATE.section = link.dataset.section;
+    document.querySelectorAll('.sidenav a[data-section]').forEach(function(l){
+      l.classList.remove('active');
     });
+    link.classList.add('active');
+    render();
   });
 });
+
+/* ---- Filter events ---- */
+document.querySelectorAll('#f-ta,#f-brand,#f-llm,#f-persona,#f-from,#f-to').forEach(function(el){
+  el.addEventListener('change', render);
+  el.addEventListener('input', render);
+});
+document.getElementById('f-reset').addEventListener('click', function(){
+  document.getElementById('f-ta').value      = '';
+  document.getElementById('f-brand').value   = '';
+  document.getElementById('f-llm').value     = '';
+  document.getElementById('f-persona').value = '';
+  document.getElementById('f-from').value    = '';
+  document.getElementById('f-to').value      = '';
+  render();
+});
+
+/* ---- Section visibility ---- */
+function showSection(id){
+  document.querySelectorAll('section.view').forEach(function(s){
+    s.classList.remove('active');
+  });
+  document.getElementById('view-'+id).classList.add('active');
+}
+
+/* ---- Sentiment helpers ---- */
+function sentClass(v){
+  if(v == null || typeof v !== 'number') return 'neu';
+  if(v >=  0.15) return 'pos';
+  if(v <= -0.15) return 'neg';
+  return 'neu';
+}
+function fmtSent(v){
+  if(v == null || typeof v !== 'number') return "<span class='chip c-mut'>&mdash;</span>";
+  var cls = sentClass(v);
+  return "<span class='sent "+cls+"'>"+(v>=0?'+':'')+v.toFixed(2)+"</span>";
+}
+
+/* ---- Chip helpers ---- */
+var POS_CLS = {
+  FIRST_LINE_RECOMMENDED:'c-pos', AMONG_OPTIONS:'c-pos',
+  SECOND_LINE:'c-neu', NOT_RECOMMENDED:'c-neg', NOT_MENTIONED:'c-mut'
+};
+var STATUS_CLS = {SUCCESS:'c-pos',TRUNCATED:'c-neu',FAILED:'c-neg',BLOCKED:'c-mut'};
+var HALLUC_CLS = {HIGH:'c-high',MEDIUM:'c-neu',LOW:'c-pos',NONE:'c-mut'};
+
+function chip(val, cls){
+  if(!val) return "<span class='chip c-mut'>&mdash;</span>";
+  return "<span class='chip "+(cls||'c-mut')+"'>"+esc(val)+"</span>";
+}
+
+/* ====================================================================
+   renderOverview
+   ==================================================================== */
+function renderOverview(rows){
+  var total    = rows.length;
+  var scored   = rows.filter(function(r){ return r.sentiment_score != null; }).length;
+  var alerts   = rows.filter(function(r){ return r.alert_triggered; }).length;
+  var hallHigh = rows.filter(function(r){ return r.hallucination_risk === 'HIGH'; }).length;
+  var driftCt  = rows.filter(function(r){
+    return r.alert_reasons && r.alert_reasons.some(function(a){ return a.startsWith('DRIFT:'); });
+  }).length;
+
+  var tilesHtml =
+    "<div class='tiles'>" +
+    "<div class='tile'><div class='lab'>Total Responses</div><div class='num'>"+esc(total)+"</div></div>" +
+    "<div class='tile'><div class='lab'>Scored</div><div class='num'>"+esc(scored)+"</div></div>" +
+    "<div class='tile "+(alerts>0?'flag':'')+"'><div class='lab'>Alerts Triggered</div><div class='num'>"+esc(alerts)+"</div></div>" +
+    "<div class='tile "+(hallHigh>0?'flag':'')+"'><div class='lab'>Hallucination HIGH</div><div class='num'>"+esc(hallHigh)+"</div></div>" +
+    "<div class='tile "+(driftCt>0?'warn':'')+"'><div class='lab'>Drift Alerts</div><div class='num'>"+esc(driftCt)+"</div></div>" +
+    "</div>";
+
+  var alertedRows = rows.filter(function(r){ return r.alert_triggered; });
+  var alertsHtml;
+  if(alertedRows.length === 0){
+    alertsHtml = "<p class='empty'>No alerts in current filter view.</p>";
+  } else {
+    alertsHtml = alertedRows.map(function(r){
+      var reasons = (r.alert_reasons||[]).map(function(a){ return esc(a); }).join(', ');
+      return "<div class='alert-item'>" +
+        "<span class='a-id'>"+esc(r.question_id)+" &middot; "+esc(r.llm_name)+"</span>" +
+        "<div class='a-reasons'>"+reasons+"</div>" +
+        "</div>";
+    }).join('');
+  }
+
+  document.getElementById('view-overview').innerHTML =
+    tilesHtml +
+    "<div class='card'>" +
+    "<h2>Headline Alerts</h2>" +
+    "<p class='hint'>Responses that crossed a monitoring threshold in this filter view.</p>" +
+    alertsHtml +
+    "</div>";
+}
+
+/* ====================================================================
+   renderMarketing — stub (Task 3)
+   ==================================================================== */
+function renderMarketing(rows){
+  document.getElementById('view-marketing').innerHTML =
+    "<div class='placeholder'><p>Marketing Analytics &mdash; coming soon.</p></div>";
+}
+
+/* ====================================================================
+   renderMedical — stub (Task 4)
+   ==================================================================== */
+function renderMedical(rows){
+  document.getElementById('view-medical').innerHTML =
+    "<div class='placeholder'><p>Medical Affairs &mdash; coming soon.</p></div>";
+}
+
+/* ====================================================================
+   renderResponses
+   ==================================================================== */
+function renderResponses(rows){
+  var head = "<thead><tr>" +
+    "<th>Time</th><th>Question</th><th>LLM</th><th>Persona</th>" +
+    "<th>Brand</th><th>Status</th><th>Sentiment</th><th>Position</th>" +
+    "<th>Confidence</th><th>Citation</th><th>Halluc</th>" +
+    "</tr></thead>";
+
+  var body = "<tbody>";
+  rows.forEach(function(r){
+    var flagged = r.alert_triggered ? ' flagged' : '';
+    var qtext   = r.question_text || '';
+    var qshort  = qtext.length > 72 ? qtext.slice(0,69)+'…' : qtext;
+    var qcell   = "<span class='qid'><strong>"+esc(r.question_id)+"</strong></span> "+esc(qshort);
+    var posCls  = POS_CLS[r.competitive_position] || 'c-mut';
+    var statCls = STATUS_CLS[r.status] || 'c-mut';
+    var hCls    = HALLUC_CLS[r.hallucination_risk] || 'c-mut';
+
+    body += "<tr class='resp"+flagged+"' data-id='"+esc(r.response_id)+"'>" +
+      "<td class='t-time'>"+esc((r.timestamp_utc||'').slice(0,10))+"</td>" +
+      "<td>"+qcell+"</td>" +
+      "<td>"+esc(r.llm_name)+"</td>" +
+      "<td>"+esc(r.persona)+"</td>" +
+      "<td>"+esc(r.brand_focus)+"</td>" +
+      "<td>"+chip(r.status, statCls)+"</td>" +
+      "<td>"+fmtSent(r.sentiment_score)+"</td>" +
+      "<td>"+chip(r.competitive_position, posCls)+"</td>" +
+      "<td>"+chip(r.confidence_level,'c-mut')+"</td>" +
+      "<td>"+chip(r.citation_quality,'c-mut')+"</td>" +
+      "<td>"+chip(r.hallucination_risk, hCls)+"</td>" +
+      "</tr>";
+
+    var rationale = r.scoring_rationale || '';
+    var detail =
+      "<div class='detail-grid'>" +
+      "<div><div class='dl'>Question</div><div class='dv'>"+esc(qtext)+"</div></div>" +
+      "<div><div class='dl'>Response</div><div class='dv'>"+esc(r.response_text||'')+"</div></div>" +
+      "<div><div class='dl'>Scoring Rationale</div><div class='dv'>"+esc(rationale)+"</div></div>" +
+      "</div>";
+    body += "<tr class='detail' style='display:none'><td colspan='11'>"+detail+"</td></tr>";
+  });
+  body += "</tbody>";
+
+  var suffix = rows.length === 0
+    ? "<p class='empty'>No responses match the current filters.</p>"
+    : "";
+
+  document.getElementById('view-responses').innerHTML =
+    "<div class='tbl-wrap'><table>"+head+body+"</table></div>" + suffix;
+
+  /* Wire row-expand clicks */
+  document.querySelectorAll('#view-responses tr.resp').forEach(function(row){
+    row.addEventListener('click', function(){
+      var det = row.nextElementSibling;
+      if(det && det.classList.contains('detail')){
+        det.style.display = (!det.style.display || det.style.display === 'none')
+          ? 'table-row' : 'none';
+      }
+    });
+  });
+}
+
+/* ====================================================================
+   Main render dispatcher
+   ==================================================================== */
+function render(){
+  var rows = applyFilters();
+  showSection(STATE.section);
+  switch(STATE.section){
+    case 'overview':   renderOverview(rows);   break;
+    case 'marketing':  renderMarketing(rows);  break;
+    case 'medical':    renderMedical(rows);    break;
+    case 'responses':  renderResponses(rows);  break;
+  }
+}
+
+/* ---- Initial render ---- */
+render();
+
+})();
 </script>"""
 
 
-def _e(value) -> str:
-    return html.escape("" if value is None else str(value))
+def render_dashboard_html(dataset: dict) -> str:
+    """Render a self-contained HTML dashboard from a dataset dict.
 
+    `dataset` must be the shape produced by `collect_dataset`:
+    { generated_at, abbvie_brands, competitor_brands, records: [...] }
+    """
+    # Embed JSON safely: escape </ to prevent injection through </script>
+    embedded_json = json.dumps(dataset, ensure_ascii=False).replace("</", r"<\/")
 
-def _sent_class(v) -> str:
-    if v is None or not isinstance(v, (int, float)):
-        return "neu"
-    if v >= 0.15:
-        return "pos"
-    if v <= -0.15:
-        return "neg"
-    return "neu"
+    generated_at = _e(dataset.get("generated_at") or "")
 
-
-_POS_CLASS = {
-    "FIRST_LINE_RECOMMENDED": "c-pos",
-    "AMONG_OPTIONS": "c-pos",
-    "SECOND_LINE": "c-neu",
-    "NOT_RECOMMENDED": "c-neg",
-    "NOT_MENTIONED": "c-mut",
-}
-_STATUS_CLASS = {
-    "SUCCESS": "c-pos", "TRUNCATED": "c-neu", "FAILED": "c-neg", "BLOCKED": "c-mut",
-}
-
-
-def _chip(value, cls: str) -> str:
-    if value is None or value == "":
-        return "<span class='chip c-mut'>&mdash;</span>"
-    return "<span class='chip " + cls + "'>" + _e(value) + "</span>"
-
-
-def _bars(d: dict, *, signed: bool = False) -> str:
-    if not d:
-        return "<p class='empty'>No data available.</p>"
-    mx = max((abs(v) for v in d.values()), default=1) or 1
-    out = ["<div class='chart'>"]
-    for k, v in d.items():
-        numeric = isinstance(v, (int, float))
-        if signed and numeric:
-            half = abs(v) / mx * 50.0
-            if v < 0:
-                fill = ("<span class='fill neg' style='right:50%%;width:%.1f%%'></span>" % half)
-                valtxt = "%+.2f" % v
-            else:
-                fill = ("<span class='fill pos' style='left:50%%;width:%.1f%%'></span>" % half)
-                valtxt = "%+.2f" % v
-            track = "<div class='track div'>" + fill + "</div>"
-        else:
-            pct = abs(v) / mx * 100.0
-            fill = ("<span class='fill' style='left:0;width:%.1f%%'></span>" % pct)
-            track = "<div class='track'>" + fill + "</div>"
-            valtxt = ("%.2f" % v) if isinstance(v, float) else _e(v)
-        out.append(
-            "<div class='brow'><span class='lab'>" + _e(k) + "</span>"
-            + track + "<span class='val'>" + valtxt + "</span></div>"
-        )
-    out.append("</div>")
-    return "".join(out)
-
-
-def _position_table(pos: dict) -> str:
-    if not pos:
-        return "<p class='empty'>No data available.</p>"
-    positions = sorted({p for counts in pos.values() for p in counts})
-    head = ("<thead><tr><th>LLM</th>"
-            + "".join("<th>" + _e(p) + "</th>" for p in positions)
-            + "</tr></thead>")
-    body = "<tbody>"
-    for llm, counts in pos.items():
-        body += "<tr><td>" + _e(llm) + "</td>"
-        for p in positions:
-            n = counts.get(p, 0)
-            cell = ("<span class='chip " + _POS_CLASS.get(p, "c-mut") + "'>" + str(n) + "</span>"
-                    if n else "<span class='c-mut' style='font-family:var(--mono);font-size:11px'>0</span>")
-            body += "<td>" + cell + "</td>"
-        body += "</tr>"
-    body += "</tbody>"
-    return "<div class='tbl-wrap'><table class='pos-tbl'>" + head + body + "</table></div>"
-
-
-def _alerts_table(alerts: list[dict]) -> str:
-    if not alerts:
-        return "<p class='empty'>No alerts triggered &mdash; all responses within thresholds.</p>"
-    body = "".join(
-        "<tr class='alert-row'><td>" + _e(a["response_id"]) + "</td><td>" + _e(a["llm_name"])
-        + "</td><td class='alert-reason'>" + _e(a["reason"]) + "</td></tr>"
-        for a in alerts
+    filter_bar = (
+        "<div class='filter-bar'>"
+        "<label>Therapeutic Area<select id='f-ta'><option value=''>All</option></select></label>"
+        "<label>Brand<select id='f-brand'><option value=''>All</option></select></label>"
+        "<label>LLM<select id='f-llm'><option value=''>All</option></select></label>"
+        "<label>Persona<select id='f-persona'><option value=''>All</option></select></label>"
+        "<label>From<input type='date' id='f-from'></label>"
+        "<label>To<input type='date' id='f-to'></label>"
+        "<button id='f-reset'>Reset</button>"
+        "</div>"
     )
-    return ("<div class='tbl-wrap'><table><thead><tr><th>Response</th><th>LLM</th>"
-            "<th>Reason</th></tr></thead><tbody>" + body + "</tbody></table></div>")
 
-
-def _select(el_id: str, label: str, options) -> str:
-    opts = "<option value=''>All</option>" + "".join(
-        "<option value='" + _e(o) + "'>" + _e(o) + "</option>" for o in options
+    nav = (
+        "<nav class='sidenav'>"
+        "<div class='nav-brand'>"
+        "<div class='kicker'>Evidence Monitoring</div>"
+        "<div class='brand-title'>Audience<br>Dashboard</div>"
+        "</div>"
+        "<ul>"
+        "<li><a href='#' data-section='overview' class='active'>Overview</a></li>"
+        "<li><a href='#' data-section='marketing'>Marketing Analytics</a></li>"
+        "<li><a href='#' data-section='medical'>Medical Affairs</a></li>"
+        "<li><a href='#' data-section='responses'>Responses</a></li>"
+        "</ul>"
+        "</nav>"
     )
-    return "<label>" + _e(label) + "<select id='" + _e(el_id) + "'>" + opts + "</select></label>"
 
-
-def _responses_table(rows: list[dict]) -> str:
-    personas = sorted({r["persona"] for r in rows if r["persona"]})
-    tas = sorted({r["therapeutic_area"] for r in rows if r["therapeutic_area"]})
-    llms = sorted({r["llm_name"] for r in rows if r["llm_name"]})
-    controls = (
-        "<div class='controls'>"
-        + _select("f-persona", "Persona", personas)
-        + _select("f-ta", "Therapeutic area", tas)
-        + _select("f-llm", "LLM", llms)
-        + "<label>From<input type='date' id='f-from'></label>"
-        + "<label>To<input type='date' id='f-to'></label>"
-        + "</div>"
+    sections = (
+        "<section id='view-overview' class='view active'></section>"
+        "<section id='view-marketing' class='view'>"
+        "<p>Marketing Analytics &mdash; coming soon.</p>"
+        "</section>"
+        "<section id='view-medical' class='view'>"
+        "<p>Medical Affairs &mdash; coming soon.</p>"
+        "</section>"
+        "<section id='view-responses' class='view'></section>"
     )
-    head = ("<thead><tr><th>Time</th><th>Question</th><th>LLM</th><th>Persona</th>"
-            "<th>Brand</th><th>Status</th><th>Sentiment</th><th>Position</th></tr></thead>")
-    body = "<tbody>"
-    for r in rows:
-        date = (r["timestamp_utc"] or "")[:10]
-        flagged = " flagged" if r["alert_triggered"] else ""
-        sv = r["sentiment_score"]
-        sentiment_cell = ("<span class='sent " + _sent_class(sv) + "'>" + ("%+.2f" % sv) + "</span>"
-                          if isinstance(sv, (int, float)) else "<span class='c-mut'>&mdash;</span>")
-        qid = _e(r.get("question_id"))
-        qtext = r.get("question_text") or ""
-        qshort = qtext if len(qtext) <= 72 else qtext[:69] + "…"
-        question_cell = "<span class='qid'><strong>" + qid + "</strong></span> " + _e(qshort)
-        status_cell = _chip(r["status"], _STATUS_CLASS.get(r["status"], "c-mut"))
-        pos_cell = _chip(r["competitive_position"] or None,
-                         _POS_CLASS.get(r["competitive_position"], "c-mut"))
-        body += (
-            "<tr class='resp" + flagged + "' data-persona='" + _e(r["persona"]) + "' data-ta='"
-            + _e(r["therapeutic_area"]) + "' data-llm='" + _e(r["llm_name"])
-            + "' data-date='" + _e(date) + "'>"
-            + "<td class='t-time'>" + _e(r["timestamp_utc"]) + "</td><td>" + question_cell
-            + "</td><td>" + _e(r["llm_name"])
-            + "</td><td>" + _e(r["persona"]) + "</td><td>" + _e(r["brand_focus"])
-            + "</td><td>" + status_cell + "</td><td>" + sentiment_cell
-            + "</td><td>" + pos_cell + "</td></tr>"
-        )
-        detail = (
-            "<div class='detail-grid'>"
-            + "<div><div class='dl'>Question</div><div class='dv'>" + _e(qtext) + "</div></div>"
-            + "<div><div class='dl'>Response</div><div class='dv'>" + _e(r["response_text"]) + "</div></div>"
-            + "<div><div class='dl'>Scoring rationale</div><div class='dv'>"
-            + _e(r["scoring_rationale"]) + "</div></div></div>"
-        )
-        body += ("<tr class='detail' style='display:none'><td colspan='8'>" + detail + "</td></tr>")
-    body += "</tbody>"
-    return controls + "<div class='tbl-wrap'><table>" + head + body + "</table></div>"
 
-
-def _stat_tiles(data: DashboardData) -> str:
-    sentiments = [v for v in data.sentiment_by_llm.values() if isinstance(v, (int, float))]
-    avg = sum(sentiments) / len(sentiments) if sentiments else None
-    avg_txt = "%+.2f" % avg if avg is not None else "—"
-    avg_cls = _sent_class(avg)
-    tiles = [
-        ("Responses", str(data.total_responses), ""),
-        ("Alerts", str(data.total_alerts), "flag" if data.total_alerts else ""),
-        ("Models tracked", str(len(data.sentiment_by_llm)), ""),
-        ("Avg sentiment", avg_txt, ""),
-    ]
-    out = "<div class='tiles'>"
-    for lab, num, extra in tiles:
-        cls = avg_cls if lab == "Avg sentiment" else ""
-        out += ("<div class='tile " + extra + "'><div class='lab'>" + lab
-                + "</div><div class='num " + cls + "'>" + num + "</div></div>")
-    return out + "</div>"
-
-
-def _section(idx: str, title: str, hint: str, inner: str) -> str:
-    return ("<div class='section'><h2><span class='idx'>" + idx + "</span>" + _e(title) + "</h2>"
-            + ("<p class='hint'>" + _e(hint) + "</p>" if hint else "")
-            + inner + "</div>")
-
-
-def render_dashboard_html(data: DashboardData) -> str:
     parts = [
         "<!DOCTYPE html>",
-        "<html lang='en'><head><meta charset='utf-8'>"
-        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-        "<title>Evidence Monitoring Dashboard</title>",
+        "<html lang='en'>",
+        "<head>",
+        "<meta charset='utf-8'>",
+        "<meta name='viewport' content='width=device-width, initial-scale=1'>",
+        "<title>Evidence Monitoring &mdash; Audience Dashboard</title>",
         _CSS,
-        "</head><body><div class='wrap'>",
-        "<header class='masthead'><p class='kicker'>Evidence Monitoring &middot; Medical Affairs</p>"
-        "<h1>Evidence Monitoring Dashboard</h1>"
-        "<p class='sub'>How large language models represent the brand across personas and therapies.</p>"
-        "</header>",
-        _stat_tiles(data),
-        _section("01", "Sentiment by LLM", "Mean brand sentiment per model, −1 to +1.",
-                 _bars(data.sentiment_by_llm, signed=True)),
-        _section("02", "Sentiment by therapy", "Mean brand sentiment per therapeutic area.",
-                 _bars(data.sentiment_by_therapy, signed=True)),
-        _section("03", "Competitive positioning by LLM",
-                 "How each model positions the brand against competitors.",
-                 _position_table(data.position_by_llm)),
-        _section("04", "Response volume over time", "Captured responses per day.",
-                 _bars(data.volume_by_date)),
-        _section("05", "Alerts (" + str(data.total_alerts) + ")",
-                 "Responses crossing a sentiment or positioning threshold.",
-                 _alerts_table(data.alerts)),
-        _section("06", "Responses", "Click any row to expand the full question, answer, and rationale.",
-                 _responses_table(data.rows)),
-        "<footer>Evidence Monitoring Agent &middot; self-contained report</footer>",
+        "</head>",
+        "<body>",
+        nav,
+        "<div class='main-wrap'>",
+        "<div class='top-bar'>",
+        "<h1>Evidence Monitoring Dashboard</h1>",
+        filter_bar,
         "</div>",
+        "<div class='content'>",
+        sections,
+        "</div>",
+        "<footer>Evidence Monitoring Agent &middot; self-contained report"
+        + (" &middot; " + generated_at if generated_at else "") + "</footer>",
+        "</div>",
+        # Embedded data (must precede the app script)
+        "<script type='application/json' id='ema-data'>" + embedded_json + "</script>",
         _JS,
-        "</body></html>",
+        "</body>",
+        "</html>",
     ]
     return "\n".join(parts)

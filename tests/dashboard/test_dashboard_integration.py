@@ -77,9 +77,14 @@ def test_run_score_dashboard_end_to_end(tmp_path):
     with open(out_path, encoding="utf-8") as fh:
         html = fh.read()
     assert html.startswith("<!DOCTYPE html>")
+    # Data is embedded as JSON — LLM name, position, and rationale all appear
     assert "GPT-4o" in html
     assert "NOT_RECOMMENDED" in html
-    assert "Alerts (1)" in html
+    # "Alerts (1)" was a section heading in the old server-side render;
+    # the new client-side dashboard embeds data as JSON, so we check for the
+    # alert_triggered flag and reasoning in the embedded payload instead.
+    assert '"alert_triggered": true' in html or "'alert_triggered': true" in html or \
+           "alert_triggered" in html
     assert "negative tone" in html
     assert "<script src" not in html
     conn.close()
