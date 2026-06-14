@@ -89,6 +89,26 @@ def test_hallucination_flags_table_exists(tmp_path):
     conn.close()
 
 
+def test_consensus_table_exists(tmp_path):
+    """init_schema creates consensus table with the expected columns."""
+    conn = connect(str(tmp_path / "t.sqlite"))
+    init_schema(conn)
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(consensus)")}
+    assert cols == {
+        "consensus_id",
+        "run_id",
+        "question_id",
+        "llm_name",
+        "canonical_position",
+        "agreement",
+        "sentiment_mean",
+        "sentiment_stdev",
+        "sample_count",
+        "created_at",
+    }
+    conn.close()
+
+
 def test_init_schema_migrates_missing_columns(tmp_path):
     """init_schema must ALTER in additive columns missing from a pre-existing DB."""
     import sqlite3 as _sqlite3

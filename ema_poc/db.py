@@ -188,6 +188,20 @@ CREATE TABLE IF NOT EXISTS hallucination_flags (
     FOREIGN KEY (response_id) REFERENCES responses(response_id)
 );
 CREATE INDEX IF NOT EXISTS idx_halluc_flags_response ON hallucination_flags(response_id);
+
+CREATE TABLE IF NOT EXISTS consensus (
+    consensus_id       TEXT PRIMARY KEY,
+    run_id             TEXT NOT NULL,
+    question_id        TEXT NOT NULL,
+    llm_name           TEXT NOT NULL,
+    canonical_position TEXT,
+    agreement          REAL NOT NULL,
+    sentiment_mean     REAL,
+    sentiment_stdev    REAL,
+    sample_count       INTEGER NOT NULL,
+    created_at         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_consensus_group ON consensus(run_id, question_id, llm_name);
 """
 
 
