@@ -41,7 +41,7 @@ class _Adapter:
         return self._behavior
 
 
-def _config(names, *, in_price=0.001, out_price=0.002, samples_per_question=1):
+def _config(names, *, in_price=0.001, out_price=0.002, samples_per_question=1, max_tokens_per_run=None):
     targets = [
         LLMTargetConfig(
             name=n, adapter="openai", model_version="m", api_key_env="K",
@@ -51,7 +51,11 @@ def _config(names, *, in_price=0.001, out_price=0.002, samples_per_question=1):
         for n in names
     ]
     return AppConfig(
-        settings=Settings(system_prompts={"default": "ctx"}, samples_per_question=samples_per_question),
+        settings=Settings(
+            system_prompts={"default": "ctx"},
+            samples_per_question=samples_per_question,
+            max_tokens_per_run=max_tokens_per_run,
+        ),
         brands=BrandConfig(),
         targets=targets,
     )
@@ -453,4 +457,78 @@ def test_resume_does_not_overwrite_backfill_for(tmp_path):
 
     # The original tag must still be intact
     assert get_run(conn, "run-bf-resume").backfill_for == "2026-06-10"
+    conn.close()
+
+
+def _seed_three_approved(conn):
+    """Seed three approved questions for budget cap tests."""
+    for qid, text, persona, domain in [
+        ("Q1", "a", "Provider", "Safety"),
+        ("Q2", "b", "Patient", "Efficacy"),
+        ("Q3", "c", "Provider", "Safety"),
+    ]:
+        add_question(conn, question_id=qid, question_text=text, persona=persona,
+                     domain=domain, now=NOW)
+        approve_question(conn, qid, approver_name="R", now=NOW)
+
+
+def test_budget_cap_stops_run_and_marks_exceeded(tmp_path):
+    """With max_tokens_per_run=T and 3 questions, only Q1 is processed.
+
+    Token math: fake adapter returns prompt_tokens=10, completion_tokens=20 → T=30
+    per question (1 adapter × 1 sample).  After Q1, total_tokens==30.  Before Q2,
+    30 >= 30 → break → BUDGET_EXCEEDED.  Q2 and Q3 never dispatched → partial data
+    retained (Q1 response present), run finalized BUDGET_EXCEEDED.
+    """
+    conn = _conn(tmp_path)
+    _seed_three_approved(conn)
+
+    # T = prompt_tokens + completion_tokens = 10 + 20 = 30
+    T = 30
+    resp = LLMResponse("ans", "stop", "SUCCESS", prompt_tokens=10, completion_tokens=20)
+    adapter = _Adapter("GPT-4o", resp)
+    cfg = _config(["GPT-4o"], samples_per_question=1, max_tokens_per_run=T)
+
+    summary = run(conn, [adapter], cfg, run_id="run-budget", id_factory=_ids(),
+                  now_factory=lambda: NOW, rate_limiters={}, sleep=lambda d: None)
+
+    # Summary must mark budget exceeded
+    assert summary.budget_exceeded is True
+    assert summary.token_budget == T
+
+    # Run row must be finalized BUDGET_EXCEEDED
+    assert get_run(conn, "run-budget").status == "BUDGET_EXCEEDED"
+
+    # Partial data retained: exactly Q1 has a response, Q2 and Q3 do not
+    distinct_qids = {
+        row[0]
+        for row in conn.execute(
+            "SELECT DISTINCT question_id FROM responses WHERE run_id='run-budget'"
+        ).fetchall()
+    }
+    assert len(distinct_qids) >= 1, "partial data must be retained"
+    assert len(distinct_qids) < 3, "Q2 and Q3 must NOT have been dispatched"
+    assert "Q1" in distinct_qids
+
+    conn.close()
+
+
+def test_no_budget_cap_runs_all(tmp_path):
+    """With max_tokens_per_run=None (default), all 3 questions are processed fully."""
+    conn = _conn(tmp_path)
+    _seed_three_approved(conn)
+
+    resp = LLMResponse("ans", "stop", "SUCCESS", prompt_tokens=10, completion_tokens=20)
+    adapter = _Adapter("GPT-4o", resp)
+    cfg = _config(["GPT-4o"], samples_per_question=1, max_tokens_per_run=None)
+
+    summary = run(conn, [adapter], cfg, run_id="run-nobudget", id_factory=_ids(),
+                  now_factory=lambda: NOW, rate_limiters={}, sleep=lambda d: None)
+
+    assert summary.budget_exceeded is False
+    assert summary.token_budget is None
+    assert get_run(conn, "run-nobudget").status == "COMPLETED"
+    assert summary.questions_attempted == 3
+    assert summary.responses_captured == 3
+
     conn.close()

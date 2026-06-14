@@ -40,6 +40,8 @@ class RunSummary:
     total_tokens: int
     est_cost: float
     backfill_for: str | None = None
+    budget_exceeded: bool = False
+    token_budget: int | None = None
 
 
 def _now_iso() -> str:
@@ -93,6 +95,9 @@ def run(
     done = completed_keys(conn, run_id)
     samples = max(1, config.settings.samples_per_question)
 
+    cap = config.settings.max_tokens_per_run
+    budget_exceeded = False
+
     by_status = {s: 0 for s in _STATUSES}
     questions_attempted = 0
     responses_captured = 0
@@ -104,6 +109,10 @@ def run(
     run_status = "COMPLETED"
     try:
         for question in questions:
+            if cap is not None and total_tokens >= cap:
+                budget_exceeded = True
+                run_status = "BUDGET_EXCEEDED"
+                break
             system_prompt = resolve_system_prompt(question.persona, config.settings)
             futures = {}
             for adapter in adapters:
@@ -204,4 +213,6 @@ def run(
         total_tokens=total_tokens,
         est_cost=est_cost,
         backfill_for=get_run(conn, run_id).backfill_for,
+        budget_exceeded=budget_exceeded,
+        token_budget=cap,
     )
