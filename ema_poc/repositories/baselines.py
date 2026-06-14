@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sqlite3
 from dataclasses import dataclass
 
 
@@ -11,14 +10,17 @@ class BaselineRow:
     question_id: str
     llm_name: str
     response_id: str
+    competitive_position: str | None
     frozen_at: str
 
 
-def set_baseline(conn, *, question_id, llm_name, response_id, now, commit=True) -> None:
+def set_baseline(conn, *, question_id, llm_name, response_id, now,
+                 competitive_position=None, commit=True) -> None:
     conn.execute(
         """INSERT OR REPLACE INTO drift_baselines
-           (question_id, llm_name, response_id, frozen_at) VALUES (?, ?, ?, ?)""",
-        (question_id, llm_name, response_id, now),
+           (question_id, llm_name, response_id, competitive_position, frozen_at)
+           VALUES (?, ?, ?, ?, ?)""",
+        (question_id, llm_name, response_id, competitive_position, now),
     )
     if commit:
         conn.commit()
@@ -26,7 +28,8 @@ def set_baseline(conn, *, question_id, llm_name, response_id, now, commit=True) 
 
 def get_baseline(conn, question_id, llm_name) -> BaselineRow | None:
     row = conn.execute(
-        """SELECT question_id, llm_name, response_id, frozen_at FROM drift_baselines
+        """SELECT question_id, llm_name, response_id, competitive_position, frozen_at
+           FROM drift_baselines
            WHERE question_id = ? AND llm_name = ?""",
         (question_id, llm_name),
     ).fetchone()
@@ -35,7 +38,8 @@ def get_baseline(conn, question_id, llm_name) -> BaselineRow | None:
 
 def list_baselines(conn) -> list[BaselineRow]:
     rows = conn.execute(
-        "SELECT question_id, llm_name, response_id, frozen_at FROM drift_baselines "
+        "SELECT question_id, llm_name, response_id, competitive_position, frozen_at "
+        "FROM drift_baselines "
         "ORDER BY question_id, llm_name"
     ).fetchall()
     return [BaselineRow(**dict(r)) for r in rows]

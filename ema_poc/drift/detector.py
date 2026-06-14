@@ -47,7 +47,7 @@ def detect_drift(conn, *, client, config, now: str, id_factory=lambda: uuid4().h
         new_vec = get_embedding(conn, latest_resp.response_id)
         cosine = cosine_similarity(base_vec, new_vec) if base_vec and new_vec else 0.0
 
-        base_pos = _position_value(baseline_resp)
+        base_pos = b.competitive_position
         new_pos = _position_value(latest_resp)
         position_changed = base_pos is not None and new_pos is not None and base_pos != new_pos
 

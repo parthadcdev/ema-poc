@@ -44,13 +44,28 @@ def test_set_get_baseline_round_trip(tmp_path):
     _insert_response(conn, response_id="resp1", question_id="Q1", llm_name="llm-a",
                      competitive_position="FIRST_LINE_RECOMMENDED")
     set_baseline(conn, question_id="Q1", llm_name="llm-a",
-                 response_id="resp1", now="2026-06-01T00:00:00+00:00")
+                 response_id="resp1", now="2026-06-01T00:00:00+00:00",
+                 competitive_position="FIRST_LINE_RECOMMENDED")
     row = get_baseline(conn, "Q1", "llm-a")
     assert row is not None
     assert row.question_id == "Q1"
     assert row.llm_name == "llm-a"
     assert row.response_id == "resp1"
     assert row.frozen_at == "2026-06-01T00:00:00+00:00"
+    assert row.competitive_position == "FIRST_LINE_RECOMMENDED"
+
+
+def test_set_get_baseline_competitive_position_none(tmp_path):
+    """competitive_position can be None (not yet scored at freeze time)."""
+    conn = _conn(tmp_path)
+    _insert_response(conn, response_id="resp1", question_id="Q1", llm_name="llm-a",
+                     competitive_position="AMONG_OPTIONS")
+    set_baseline(conn, question_id="Q1", llm_name="llm-a",
+                 response_id="resp1", now="2026-06-01T00:00:00+00:00",
+                 competitive_position=None)
+    row = get_baseline(conn, "Q1", "llm-a")
+    assert row is not None
+    assert row.competitive_position is None
 
 
 def test_get_baseline_missing_returns_none(tmp_path):
@@ -65,20 +80,29 @@ def test_list_baselines_empty(tmp_path):
 
 def test_list_baselines_multiple_ordered(tmp_path):
     conn = _conn(tmp_path)
-    for rid, qid, llm in [("r1", "Q2", "llm-b"), ("r2", "Q1", "llm-a"), ("r3", "Q2", "llm-a")]:
+    for rid, qid, llm, pos in [
+        ("r1", "Q2", "llm-b", "AMONG_OPTIONS"),
+        ("r2", "Q1", "llm-a", "FIRST_LINE_RECOMMENDED"),
+        ("r3", "Q2", "llm-a", "SECOND_LINE"),
+    ]:
         _insert_response(conn, response_id=rid, question_id=qid, llm_name=llm,
-                         competitive_position="AMONG_OPTIONS")
+                         competitive_position=pos)
     set_baseline(conn, question_id="Q2", llm_name="llm-b", response_id="r1",
-                 now="2026-06-01T00:00:00+00:00")
+                 now="2026-06-01T00:00:00+00:00", competitive_position="AMONG_OPTIONS")
     set_baseline(conn, question_id="Q1", llm_name="llm-a", response_id="r2",
-                 now="2026-06-01T00:00:00+00:00")
+                 now="2026-06-01T00:00:00+00:00", competitive_position="FIRST_LINE_RECOMMENDED")
     set_baseline(conn, question_id="Q2", llm_name="llm-a", response_id="r3",
-                 now="2026-06-01T00:00:00+00:00")
+                 now="2026-06-01T00:00:00+00:00", competitive_position="SECOND_LINE")
     rows = list_baselines(conn)
     # ordered by question_id then llm_name
     assert [(r.question_id, r.llm_name) for r in rows] == [
         ("Q1", "llm-a"), ("Q2", "llm-a"), ("Q2", "llm-b")
     ]
+    # positions round-trip
+    pos_map = {(r.question_id, r.llm_name): r.competitive_position for r in rows}
+    assert pos_map[("Q1", "llm-a")] == "FIRST_LINE_RECOMMENDED"
+    assert pos_map[("Q2", "llm-a")] == "SECOND_LINE"
+    assert pos_map[("Q2", "llm-b")] == "AMONG_OPTIONS"
 
 
 def test_set_baseline_insert_or_replace(tmp_path):
@@ -90,12 +114,15 @@ def test_set_baseline_insert_or_replace(tmp_path):
                      competitive_position="AMONG_OPTIONS",
                      timestamp_utc="2026-02-01T00:00:00+00:00")
     set_baseline(conn, question_id="Q1", llm_name="llm-a",
-                 response_id="resp1", now="2026-06-01T00:00:00+00:00")
+                 response_id="resp1", now="2026-06-01T00:00:00+00:00",
+                 competitive_position="FIRST_LINE_RECOMMENDED")
     set_baseline(conn, question_id="Q1", llm_name="llm-a",
-                 response_id="resp2", now="2026-06-02T00:00:00+00:00")
+                 response_id="resp2", now="2026-06-02T00:00:00+00:00",
+                 competitive_position="AMONG_OPTIONS")
     row = get_baseline(conn, "Q1", "llm-a")
     assert row.response_id == "resp2"
     assert row.frozen_at == "2026-06-02T00:00:00+00:00"
+    assert row.competitive_position == "AMONG_OPTIONS"
 
 
 # ---------------------------------------------------------------------------
@@ -115,6 +142,19 @@ def test_freeze_baseline_picks_latest_scored(tmp_path):
     assert count == 1
     row = get_baseline(conn, "Q1", "llm-a")
     assert row.response_id == "new"
+    # The frozen position must match the latest scored response's position
+    assert row.competitive_position == "FIRST_LINE_RECOMMENDED"
+
+
+def test_freeze_baseline_stores_frozen_position(tmp_path):
+    """freeze_baseline snapshots the competitive_position of the latest scored response."""
+    conn = _conn(tmp_path)
+    _insert_response(conn, response_id="resp1", question_id="Q1", llm_name="llm-a",
+                     competitive_position="FIRST_LINE_RECOMMENDED",
+                     timestamp_utc="2026-01-01T00:00:00+00:00")
+    freeze_baseline(conn, now="2026-06-01T00:00:00+00:00")
+    row = get_baseline(conn, "Q1", "llm-a")
+    assert row.competitive_position == "FIRST_LINE_RECOMMENDED"
 
 
 def test_freeze_baseline_unscored_pair_gets_no_baseline(tmp_path):
@@ -146,6 +186,7 @@ def test_freeze_baseline_skips_already_frozen(tmp_path):
     assert count == 0
     row = get_baseline(conn, "Q1", "llm-a")
     assert row.response_id == "resp1"  # still the original
+    assert row.competitive_position == "AMONG_OPTIONS"  # still the original position
 
 
 def test_freeze_baseline_force_updates_to_newest(tmp_path):
@@ -166,6 +207,7 @@ def test_freeze_baseline_force_updates_to_newest(tmp_path):
     row = get_baseline(conn, "Q1", "llm-a")
     assert row.response_id == "resp2"
     assert row.frozen_at == "2026-06-02T00:00:00+00:00"
+    assert row.competitive_position == "FIRST_LINE_RECOMMENDED"
 
 
 def test_freeze_baseline_returns_count(tmp_path):
@@ -199,6 +241,7 @@ def test_freeze_baseline_mixed_scored_unscored_in_pair(tmp_path):
     assert count == 1
     row = get_baseline(conn, "Q1", "llm-a")
     assert row.response_id == "scored"
+    assert row.competitive_position == "SECOND_LINE"
 
 
 def test_freeze_baseline_no_responses_returns_zero(tmp_path):

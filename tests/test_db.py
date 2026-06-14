@@ -67,7 +67,7 @@ def test_drift_baselines_table_exists(tmp_path):
     conn = connect(str(tmp_path / "t.sqlite"))
     init_schema(conn)
     cols = {row["name"] for row in conn.execute("PRAGMA table_info(drift_baselines)")}
-    assert cols == {"question_id", "llm_name", "response_id", "frozen_at"}
+    assert cols == {"question_id", "llm_name", "response_id", "competitive_position", "frozen_at"}
     conn.close()
 
 

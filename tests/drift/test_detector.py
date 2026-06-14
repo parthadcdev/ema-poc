@@ -118,9 +118,10 @@ def _setup_pair(
     # Score the latest response so latest_score() finds a row
     _save_score_for(conn, response_id=lid, score_id=sid, position=latest_pos)
 
-    # Freeze the baseline
+    # Freeze the baseline — store the frozen position from the baseline response
     set_baseline(conn, question_id=question_id, llm_name=llm_name,
-                 response_id=bid, now=NOW)
+                 response_id=bid, now=NOW,
+                 competitive_position=baseline_pos.value)
 
     return bid, lid, sid
 
@@ -245,7 +246,8 @@ def test_skips_when_no_newer_response_than_baseline(tmp_path):
                      timestamp_utc="2026-01-01T00:00:00+00:00")
     _save_score_for(conn, response_id="only", score_id="score-only")
     set_baseline(conn, question_id="Q4", llm_name="llm-d",
-                 response_id="only", now=NOW)
+                 response_id="only", now=NOW,
+                 competitive_position=CompetitivePosition.AMONG_OPTIONS.value)
 
     mapping = {"only answer": [1.0, 0.0]}
     client = FakeEmb(mapping)
@@ -333,3 +335,85 @@ def test_multiple_pairs_only_drifted_ones_counted(tmp_path):
     assert summary.drifted == 1
     alerts = list_alerts(conn)
     assert len(alerts) == 1
+
+
+# ---------------------------------------------------------------------------
+# Immutability proof: frozen position is NOT affected by later re-scores
+# ---------------------------------------------------------------------------
+
+def test_frozen_position_anchor_is_truly_immutable(tmp_path):
+    """Prove that the detector reads the FROZEN baseline position, not the
+    mutable response cache.
+
+    Steps:
+    1. Insert a response with competitive_position=FIRST_LINE_RECOMMENDED.
+    2. Freeze a baseline pointing to it, capturing the frozen position.
+    3. Mutate the response row's competitive_position to NOT_MENTIONED (simulating
+       a re-score after the freeze).
+    4. Insert a NEW (later-timestamped) response with FIRST_LINE_RECOMMENDED and
+       identical text to the baseline (cosine == 1.0, same position as frozen).
+    5. Run detect_drift — assert NO position-drift alert fires, because the
+       detector compares against the FROZEN FIRST_LINE_RECOMMENDED, not the
+       mutated NOT_MENTIONED.
+    """
+    conn = _conn(tmp_path)
+    shared_vec = [1.0, 0.0]
+
+    # Step 1: baseline response
+    _insert_response(
+        conn,
+        response_id="base-resp",
+        question_id="Q-frozen",
+        llm_name="llm-x",
+        response_text="stable answer",
+        competitive_position=CompetitivePosition.FIRST_LINE_RECOMMENDED.value,
+        timestamp_utc="2026-01-01T00:00:00+00:00",
+    )
+
+    # Step 2: freeze — stores FIRST_LINE_RECOMMENDED in drift_baselines
+    set_baseline(
+        conn,
+        question_id="Q-frozen",
+        llm_name="llm-x",
+        response_id="base-resp",
+        now=NOW,
+        competitive_position=CompetitivePosition.FIRST_LINE_RECOMMENDED.value,
+    )
+
+    # Step 3: mutate the response row — simulate a re-score that changes position
+    conn.execute(
+        "UPDATE responses SET competitive_position = ? WHERE response_id = ?",
+        (CompetitivePosition.NOT_MENTIONED.value, "base-resp"),
+    )
+    conn.commit()
+
+    # Step 4: newer response with SAME text and SAME position as the frozen baseline
+    _insert_response(
+        conn,
+        response_id="new-resp",
+        question_id="Q-frozen",
+        llm_name="llm-x",
+        response_text="stable answer",   # identical → cosine == 1.0
+        competitive_position=CompetitivePosition.FIRST_LINE_RECOMMENDED.value,
+        timestamp_utc="2026-05-01T00:00:00+00:00",
+    )
+    _save_score_for(
+        conn,
+        response_id="new-resp",
+        score_id="score-new",
+        position=CompetitivePosition.FIRST_LINE_RECOMMENDED,
+    )
+
+    # Step 5: detect — no drift expected
+    mapping = {"stable answer": shared_vec}
+    client = FakeEmb(mapping)
+    config = _make_config(threshold=0.85)
+
+    summary = detect_drift(conn, client=client, config=config, now=NOW2)
+
+    assert summary.compared == 1
+    assert summary.drifted == 0, (
+        "Position drift alert fired even though new response matches the FROZEN position; "
+        "detector must be reading the mutable response cache instead of the frozen baseline."
+    )
+    assert list_alerts(conn) == []
