@@ -89,6 +89,7 @@ def run(
         questions = [q for q in questions if q.domain.value == _ev(domain)]
 
     done = completed_keys(conn, run_id)
+    samples = max(1, config.settings.samples_per_question)
 
     by_status = {s: 0 for s in _STATUSES}
     questions_attempted = 0
@@ -104,27 +105,28 @@ def run(
             system_prompt = resolve_system_prompt(question.persona, config.settings)
             futures = {}
             for adapter in adapters:
-                if (question.question_id, adapter.name, 0) in done:
-                    continue
-                futures[
-                    pool.submit(
-                        execute,
-                        adapter,
-                        system_prompt,
-                        question.question_text,
-                        max_retries=config.settings.max_retries,
-                        backoff=config.settings.backoff_seconds,
-                        rate_limiter=rate_limiters.get(adapter.name),
-                        sleep=sleep,
-                    )
-                ] = adapter
+                for sample_index in range(samples):
+                    if (question.question_id, adapter.name, sample_index) in done:
+                        continue
+                    futures[
+                        pool.submit(
+                            execute,
+                            adapter,
+                            system_prompt,
+                            question.question_text,
+                            max_retries=config.settings.max_retries,
+                            backoff=config.settings.backoff_seconds,
+                            rate_limiter=rate_limiters.get(adapter.name),
+                            sleep=sleep,
+                        )
+                    ] = (adapter, sample_index)
 
             if not futures:
                 continue
             questions_attempted += 1
 
             for fut in as_completed(futures):
-                adapter = futures[fut]
+                adapter, sample_index = futures[fut]
                 llm_resp = fut.result()
                 now = now_factory()
                 response = build_response(
@@ -135,6 +137,7 @@ def run(
                     now=now,
                     response_id=id_factory(),
                     system_prompt=system_prompt,
+                    sample_index=sample_index,
                 )
                 save_response(conn, response)
                 if llm_resp.citations:

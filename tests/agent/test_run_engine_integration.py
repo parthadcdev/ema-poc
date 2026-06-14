@@ -52,7 +52,7 @@ def _config(names):
         )
         for n in names
     ]
-    return AppConfig(settings=Settings(system_prompts={"default": "ctx"}),
+    return AppConfig(settings=Settings(system_prompts={"default": "ctx"}, samples_per_question=1),
                      brands=BrandConfig(), targets=targets)
 
 

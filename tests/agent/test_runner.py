@@ -41,7 +41,7 @@ class _Adapter:
         return self._behavior
 
 
-def _config(names, *, in_price=0.001, out_price=0.002):
+def _config(names, *, in_price=0.001, out_price=0.002, samples_per_question=1):
     targets = [
         LLMTargetConfig(
             name=n, adapter="openai", model_version="m", api_key_env="K",
@@ -51,7 +51,7 @@ def _config(names, *, in_price=0.001, out_price=0.002):
         for n in names
     ]
     return AppConfig(
-        settings=Settings(system_prompts={"default": "ctx"}),
+        settings=Settings(system_prompts={"default": "ctx"}, samples_per_question=samples_per_question),
         brands=BrandConfig(),
         targets=targets,
     )
@@ -290,4 +290,100 @@ def test_no_model_drift_event_when_actual_matches_or_is_none(tmp_path):
     events = list_events(conn)
     drift_events = [e for e in events if e["event_type"] == "MODEL_DRIFT"]
     assert drift_events == [], f"Expected no drift events, got: {drift_events}"
+    conn.close()
+
+
+def test_run_submits_n_samples_per_question(tmp_path):
+    """With samples_per_question=2, the runner submits 2 tasks per (question,
+    adapter) and stores two rows with sample_index 0 and 1."""
+    conn = _conn(tmp_path)
+    add_question(conn, question_id="Q1", question_text="a", persona="Provider",
+                 domain="Safety", now=NOW)
+    approve_question(conn, "Q1", approver_name="R", now=NOW)
+
+    resp = LLMResponse("ans", "stop", "SUCCESS", prompt_tokens=1, completion_tokens=1)
+    adapter = _Adapter("GPT-4o", resp)
+    cfg = _config(["GPT-4o"], samples_per_question=2)
+
+    # id_factory must yield enough unique ids: 1 run_id already consumed before
+    # run(), plus 2 response_ids inside run().
+    ids = _ids()
+    run(conn, [adapter], cfg, run_id="run-multi", id_factory=ids,
+        now_factory=lambda: NOW, rate_limiters={}, sleep=lambda d: None)
+
+    assert adapter.calls == 2
+
+    rows = conn.execute(
+        "SELECT sample_index FROM responses WHERE question_id='Q1' AND llm_name='GPT-4o' "
+        "ORDER BY sample_index",
+    ).fetchall()
+    assert len(rows) == 2
+    assert {r[0] for r in rows} == {0, 1}
+
+    assert completed_keys(conn, "run-multi") == {("Q1", "GPT-4o", 0), ("Q1", "GPT-4o", 1)}
+    conn.close()
+
+
+def test_resume_fills_missing_sample(tmp_path):
+    """With samples_per_question=2 and sample_index 0 already persisted as
+    SUCCESS, re-running with the same run_id only submits sample_index 1."""
+    from ema_poc.repositories.responses import save_response, build_response
+    from ema_poc.repositories.questions import active_approved
+
+    conn = _conn(tmp_path)
+    add_question(conn, question_id="Q1", question_text="a", persona="Provider",
+                 domain="Safety", now=NOW)
+    approve_question(conn, "Q1", approver_name="R", now=NOW)
+
+    from ema_poc.repositories.runs import create_run
+
+    # Pre-create the run row so runner finds it via get_run.
+    create_run(conn, "run-resume", started_at=NOW)
+
+    # Pre-insert sample_index=0 as a SUCCESS response.
+    questions = active_approved(conn)
+    q = questions[0]
+
+    class _FakeAdapter:
+        name = "GPT-4o"
+        model_version = "m"
+        params = {}
+        grounded = False
+
+    pre_resp = LLMResponse("pre", "stop", "SUCCESS", prompt_tokens=1, completion_tokens=1)
+    pre_response = build_response(
+        run_id="run-resume",
+        question=q,
+        adapter=_FakeAdapter(),
+        llm_response=pre_resp,
+        now=NOW,
+        response_id="pre-id-0",
+        system_prompt="ctx",
+        sample_index=0,
+    )
+    save_response(conn, pre_response)
+
+    # Confirm completed_keys already has sample_index=0.
+    assert ("Q1", "GPT-4o", 0) in completed_keys(conn, "run-resume")
+
+    live_resp = LLMResponse("live", "stop", "SUCCESS", prompt_tokens=2, completion_tokens=2)
+    adapter = _Adapter("GPT-4o", live_resp)
+    cfg = _config(["GPT-4o"], samples_per_question=2)
+
+    ids = _ids()
+    run(conn, [adapter], cfg, run_id="run-resume", id_factory=ids,
+        now_factory=lambda: NOW, rate_limiters={}, sleep=lambda d: None)
+
+    # Only sample_index=1 was missing, so adapter called exactly once.
+    assert adapter.calls == 1
+
+    # Now both sample indices present.
+    assert completed_keys(conn, "run-resume") == {("Q1", "GPT-4o", 0), ("Q1", "GPT-4o", 1)}
+
+    rows = conn.execute(
+        "SELECT sample_index FROM responses WHERE question_id='Q1' AND llm_name='GPT-4o' "
+        "ORDER BY sample_index",
+    ).fetchall()
+    assert len(rows) == 2
+    assert {r[0] for r in rows} == {0, 1}
     conn.close()
