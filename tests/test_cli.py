@@ -495,3 +495,63 @@ def test_run_normalizes_compact_backfill_date():
     assert rc == 0
     assert calls["run"] is not None
     assert calls["run"]["backfill_for"] == "2026-06-10"
+
+
+# ---------------------------------------------------------------------------
+# suggest-questions command tests
+# ---------------------------------------------------------------------------
+
+def test_suggest_questions_runs_and_prints():
+    """suggest-questions calls generate_questions, returns 0, prints summary and proposals."""
+    from types import SimpleNamespace
+
+    captured_kwargs = {}
+
+    def _fake_generate(conn, **kwargs):
+        captured_kwargs.update(kwargs)
+        summary = SimpleNamespace(proposed=5, stored=4, skipped=1)
+        proposals = [
+            SimpleNamespace(
+                persona="Provider",
+                domain="Efficacy",
+                brand_focus="Skyrizi",
+                question_text="Q?",
+                rationale="fills gap",
+            )
+        ]
+        return summary, proposals
+
+    deps, out, calls = _fake_deps(
+        make_scoring_client=lambda env: object(),
+        generate_questions=_fake_generate,
+    )
+    rc = main(["suggest-questions", "--count", "5"], deps=deps)
+
+    assert rc == 0
+    full_output = "\n".join(out)
+    assert "5" in full_output
+    assert "4" in full_output
+    assert "1" in full_output
+    assert "Q?" in full_output
+    assert captured_kwargs.get("count") == 5
+
+
+def test_suggest_questions_validates_credentials():
+    """suggest-questions is in the credential-validation tuple."""
+    from types import SimpleNamespace
+
+    validated = {"called": False}
+
+    def _validate(config, env):
+        validated["called"] = True
+
+    deps, out, _ = _fake_deps(
+        validate_credentials=_validate,
+        make_scoring_client=lambda env: object(),
+        generate_questions=lambda conn, **k: (
+            SimpleNamespace(proposed=0, stored=0, skipped=0),
+            [],
+        ),
+    )
+    main(["suggest-questions"], deps=deps)
+    assert validated["called"] is True

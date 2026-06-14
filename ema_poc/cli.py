@@ -40,6 +40,7 @@ class Deps:
     check_hallucinations: Callable | None = None
     load_reference_corpus: Callable | None = None
     compute_consensus: Callable | None = None
+    generate_questions: Callable | None = None
 
 
 def _make_scoring_client(env):
@@ -69,6 +70,7 @@ def default_deps() -> Deps:
     from ema_poc.hallucination.pipeline import check_pending
     from ema_poc.hallucination.corpus import load_reference_corpus
     from ema_poc.consensus.compute import compute_consensus
+    from ema_poc.suggest.pipeline import generate_and_store
 
     def _serve_app(app, *, host, port):
         import uvicorn
@@ -101,6 +103,7 @@ def default_deps() -> Deps:
         check_hallucinations=check_pending,
         load_reference_corpus=load_reference_corpus,
         compute_consensus=compute_consensus,
+        generate_questions=generate_and_store,
     )
 
 
@@ -147,6 +150,9 @@ def _parse_args(argv):
 
     sub.add_parser("consensus", help="Compute majority-vote consensus across samples + variance alerts")
 
+    p_sug = sub.add_parser("suggest-questions", help="Propose new questions for coverage gaps (stored PENDING for Medical Affairs)")
+    p_sug.add_argument("--count", type=int, default=10)
+
     return parser.parse_args(argv)
 
 
@@ -170,7 +176,7 @@ def main(argv=None, deps: Deps | None = None) -> int:
                 f"Invalid --backfill-for date: {backfill_for!r} (expected YYYY-MM-DD)"
             )
 
-    if args.command in ("run", "dry-run", "score", "healthcheck", "serve", "drift", "check-hallucinations"):
+    if args.command in ("run", "dry-run", "score", "healthcheck", "serve", "drift", "check-hallucinations", "suggest-questions"):
         deps.validate_credentials(config, deps.env)
 
     if args.command == "import-questions":
@@ -273,6 +279,19 @@ def main(argv=None, deps: Deps | None = None) -> int:
         conn = _open_db(deps, config)
         summary = deps.compute_consensus(conn)
         deps.out(f"Consensus: {summary.groups} group(s), variance alerts {summary.alerts_raised}.")
+        return 0
+
+    if args.command == "suggest-questions":
+        conn = _open_db(deps, config)
+        client = deps.make_scoring_client(deps.env)
+        summary, proposals = deps.generate_questions(conn, client=client, config=config, count=args.count)
+        deps.out(
+            f"Proposed {summary.proposed}, stored {summary.stored} PENDING, "
+            f"skipped {summary.skipped} duplicate(s)."
+        )
+        for p in proposals:
+            deps.out(f"  [{p.persona}/{p.domain}/{p.brand_focus}] {p.question_text}")
+            deps.out(f"      rationale: {p.rationale}")
         return 0
 
     # run
