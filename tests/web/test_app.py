@@ -81,3 +81,21 @@ def test_index_has_xss_escaping_helpers(tmp_path):
     # citations and message must not interpolate raw values
     assert "esc(c.title" in html
     assert "safeUrl(c.url" in html
+
+
+def test_dashboard_route_serves_html(tmp_path):
+    from fastapi.testclient import TestClient
+    r = TestClient(create_app(_deps(tmp_path))).get("/dashboard")
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+    body = r.text
+    assert "id='view-overview'" in body or 'id="view-overview"' in body
+    # back-link rendered as HTML entity ← or literal ←
+    assert "← Playground" in body or "&larr; Playground" in body
+    assert 'href="/"' in body
+
+
+def test_index_has_dashboard_link(tmp_path):
+    from fastapi.testclient import TestClient
+    body = TestClient(create_app(_deps(tmp_path))).get("/").text
+    assert 'href="/dashboard"' in body

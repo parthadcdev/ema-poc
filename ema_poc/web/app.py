@@ -11,8 +11,10 @@ from typing import Callable
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 
+from ema_poc.dashboard.dataset import collect_dataset
+from ema_poc.dashboard.render import render_dashboard_html
 from ema_poc.db import connect, init_schema
 from ema_poc.playground.service import run_playground
 
@@ -34,6 +36,20 @@ def create_app(deps: WebDeps) -> FastAPI:
     @app.get("/")
     def index():
         return FileResponse(str(_STATIC / "index.html"))
+
+    @app.get("/dashboard", response_class=HTMLResponse)
+    def dashboard():
+        conn = connect(deps.db_path)
+        try:
+            init_schema(conn)
+            dataset = collect_dataset(
+                conn,
+                abbvie_brands=deps.config.brands.abbvie_brands,
+                competitor_brands=deps.config.brands.competitor_brands,
+            )
+        finally:
+            conn.close()
+        return HTMLResponse(render_dashboard_html(dataset, playground_url="/"))
 
     @app.get("/api/targets")
     def targets():

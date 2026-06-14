@@ -6,8 +6,10 @@
 <title>EMA Playground</title>
 <style>
   body { font-family: system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #1a1a1a; }
-  header { background: #1f2a44; color: #fff; padding: 1rem 1.5rem; }
-  header h1 { margin: 0; font-size: 1.15rem; }
+  header { background: #1f2a44; color: #fff; padding: 1rem 1.5rem; display: flex; align-items: center; gap: 1rem; }
+  header h1 { margin: 0; font-size: 1.15rem; flex: 1; }
+  .navlink { color: rgba(255,255,255,.78); text-decoration: none; font-size: .82rem; padding: .3rem .75rem; border: 1px solid rgba(255,255,255,.3); border-radius: 4px; white-space: nowrap; }
+  .navlink:hover { background: rgba(255,255,255,.12); color: #fff; }
   main { max-width: 1100px; margin: 1.5rem auto; padding: 0 1rem; }
   .panel { background: #fff; border: 1px solid #e3e6eb; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.25rem; }
   textarea { width: 100%; box-sizing: border-box; min-height: 64px; font: inherit; padding: .5rem; }
@@ -30,7 +32,8 @@
 </style>
 </head>
 <body>
-<header><h1>Evidence Monitoring &mdash; Real-Time Playground</h1></header>
+<header><h1>Evidence Monitoring &mdash; Real-Time Playground</h1>
+<a href="/dashboard" class="navlink">Dashboard &rarr;</a></header>
 <main>
   <div class="panel">
     <textarea id="question" placeholder="Ask any question (do NOT enter PII/PHI)&hellip;"></textarea>
