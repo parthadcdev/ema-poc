@@ -6,6 +6,8 @@ surface: query-by-any-combination, pagination, and change detection
 from __future__ import annotations
 
 import difflib
+import hashlib
+import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
@@ -30,10 +32,22 @@ def build_response(
     llm_response: LLMResponse,
     now: str,
     response_id: str,
+    system_prompt: str = "",
 ) -> Response:
     """Construct a Response row from a question, the adapter that answered, and
     the normalized LLMResponse. sentiment_score/competitive_position stay null
     (populated by the Phase 5 scoring pass)."""
+    provenance = json.dumps(
+        {
+            "model_version": adapter.model_version,
+            "params": dict(getattr(adapter, "params", {}) or {}),
+            "grounded": bool(getattr(adapter, "grounded", False)),
+            "system_prompt_sha256": hashlib.sha256(
+                system_prompt.encode("utf-8")
+            ).hexdigest(),
+        },
+        sort_keys=True,
+    )
     return Response(
         response_id=response_id,
         run_id=run_id,
@@ -52,6 +66,7 @@ def build_response(
         status=llm_response.status,
         alert_triggered=False,
         created_at=now,
+        provenance=provenance,
     )
 
 
@@ -62,8 +77,9 @@ def save_response(conn: sqlite3.Connection, response: Response) -> None:
             response_id, run_id, timestamp_utc, llm_name, llm_model_version,
             persona, question_id, question_text, therapeutic_area, brand_focus,
             domain, response_text, response_tokens, finish_reason, status,
-            sentiment_score, competitive_position, alert_triggered, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            sentiment_score, competitive_position, alert_triggered, created_at,
+            provenance
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             response.response_id,
@@ -87,6 +103,7 @@ def save_response(conn: sqlite3.Connection, response: Response) -> None:
             else None,
             int(response.alert_triggered),
             _iso(response.created_at),
+            response.provenance,
         ),
     )
     conn.commit()

@@ -96,6 +96,7 @@ class Response(BaseModel):
     competitive_position: CompetitivePosition | None = None
     alert_triggered: bool = False
     created_at: datetime | None = None
+    provenance: str | None = None
 
 
 class Score(BaseModel):

@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS responses (
     competitive_position TEXT,
     alert_triggered      INTEGER NOT NULL DEFAULT 0,
     created_at           TEXT NOT NULL,
+    provenance           TEXT,
     FOREIGN KEY (run_id) REFERENCES runs(run_id)
 );
 CREATE INDEX IF NOT EXISTS idx_responses_run ON responses(run_id);

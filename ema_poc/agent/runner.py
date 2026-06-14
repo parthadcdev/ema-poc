@@ -134,6 +134,7 @@ def run(
                     llm_response=llm_resp,
                     now=now,
                     response_id=id_factory(),
+                    system_prompt=system_prompt,
                 )
                 save_response(conn, response)
                 if llm_resp.citations:

@@ -1,3 +1,6 @@
+import hashlib
+import json
+
 import pytest
 
 from ema_poc.adapters.base import LLMResponse
@@ -11,8 +14,9 @@ from ema_poc.config import (
     Settings,
 )
 from ema_poc.db import connect, init_schema
+from ema_poc.prompts import resolve_system_prompt
 from ema_poc.repositories.questions import add_question, approve_question
-from ema_poc.repositories.responses import completed_keys
+from ema_poc.repositories.responses import completed_keys, query_responses
 from ema_poc.repositories.runs import get_run
 
 NOW = "2026-06-13T02:00:00+00:00"
@@ -186,4 +190,40 @@ def test_run_marks_run_failed_when_a_db_write_raises(tmp_path, monkeypatch):
             now_factory=lambda: NOW, rate_limiters={}, sleep=lambda d: None)
     # the run row is finalized to FAILED, not left stuck in RUNNING
     assert get_run(conn, "run-1").status == "FAILED"
+    conn.close()
+
+
+def test_run_saves_provenance_on_each_response(tmp_path):
+    """After a successful run, every response row has a non-null provenance
+    JSON blob with all four keys, and system_prompt_sha256 matches what the
+    runner would have computed from resolve_system_prompt."""
+    conn = _conn(tmp_path)
+    # Seed one approved question with persona=Provider
+    add_question(conn, question_id="Q1", question_text="a", persona="Provider",
+                 domain="Safety", now=NOW)
+    approve_question(conn, "Q1", approver_name="R", now=NOW)
+
+    cfg = _config(["GPT-4o"])
+    a = _Adapter("GPT-4o", LLMResponse("x", "stop", "SUCCESS", prompt_tokens=1, completion_tokens=1))
+    run(conn, [a], cfg, run_id="run-p", id_factory=_ids(),
+        now_factory=lambda: NOW, rate_limiters={}, sleep=lambda d: None)
+
+    responses = query_responses(conn, llm="GPT-4o")
+    assert len(responses) == 1
+    resp = responses[0]
+
+    # provenance must be non-null and parseable
+    assert resp.provenance is not None
+    prov = json.loads(resp.provenance)
+
+    # all four required keys must be present
+    assert set(prov.keys()) == {"model_version", "params", "grounded", "system_prompt_sha256"}
+
+    # system_prompt_sha256 must match what resolve_system_prompt returns for
+    # persona=Provider with this config's system_prompts={"default": "ctx"}
+    from ema_poc.models import Persona
+    expected_prompt = resolve_system_prompt(Persona.PROVIDER, cfg.settings)
+    expected_sha = hashlib.sha256(expected_prompt.encode("utf-8")).hexdigest()
+    assert prov["system_prompt_sha256"] == expected_sha
+
     conn.close()
