@@ -5,13 +5,19 @@ class _Config:
     class settings:
         db_path = "ema.sqlite"
 
+    class brands:
+        abbvie_brands = ["Skyrizi", "Rinvoq"]
+        competitor_brands = ["Humira"]
+
 
 def test_dashboard_command_invokes_build_and_reports(tmp_path):
     calls = {}
     out = []
 
-    def _build(conn, out_path):
+    def _build(conn, out_path, *, abbvie_brands, competitor_brands, now=""):
         calls["out_path"] = out_path
+        calls["abbvie_brands"] = abbvie_brands
+        calls["competitor_brands"] = competitor_brands
         return out_path
 
     deps = Deps(
@@ -34,4 +40,6 @@ def test_dashboard_command_invokes_build_and_reports(tmp_path):
     rc = main(["dashboard", "--out", str(tmp_path / "d.html")], deps=deps)
     assert rc == 0
     assert calls["out_path"] == str(tmp_path / "d.html")
+    assert calls["abbvie_brands"] == ["Skyrizi", "Rinvoq"]
+    assert calls["competitor_brands"] == ["Humira"]
     assert any("Dashboard written" in line for line in out)

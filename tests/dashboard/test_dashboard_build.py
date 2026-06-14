@@ -19,7 +19,7 @@ def test_build_dashboard_writes_html_file(tmp_path):
         status="SUCCESS", created_at=NOW,
     ))
     out = tmp_path / "dash.html"
-    returned = build_dashboard(conn, str(out))
+    returned = build_dashboard(conn, str(out), abbvie_brands=["Skyrizi"], competitor_brands=[])
     assert returned == str(out)
     html = out.read_text(encoding="utf-8")
     assert html.startswith("<!DOCTYPE html>")
