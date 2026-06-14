@@ -485,3 +485,13 @@ def test_run_without_backfill_for_passes_none():
     assert rc == 0
     assert calls["run"] is not None
     assert calls["run"]["backfill_for"] is None
+
+
+def test_run_normalizes_compact_backfill_date():
+    """A compact date like '20260610' is normalized to '2026-06-10' before being
+    passed to deps.run, and credential validation is still invoked."""
+    deps, out, calls = _fake_deps()
+    rc = main(["run", "--backfill-for", "20260610"], deps=deps)
+    assert rc == 0
+    assert calls["run"] is not None
+    assert calls["run"]["backfill_for"] == "2026-06-10"

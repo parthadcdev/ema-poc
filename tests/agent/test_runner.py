@@ -425,3 +425,32 @@ def test_no_backfill_for_returns_none_in_summary(tmp_path):
 
     assert summary.backfill_for is None
     conn.close()
+
+
+def test_resume_does_not_overwrite_backfill_for(tmp_path):
+    """Resuming an existing run with a different backfill_for must NOT overwrite
+    the original tag stored when the run was first created."""
+    conn = _conn(tmp_path)
+    add_question(conn, question_id="Q1", question_text="a", persona="Provider",
+                 domain="Safety", now=NOW)
+    approve_question(conn, "Q1", approver_name="R", now=NOW)
+
+    resp = LLMResponse("ans", "stop", "SUCCESS", prompt_tokens=1, completion_tokens=1)
+    cfg = _config(["GPT-4o"], samples_per_question=1)
+    ids = _ids()
+
+    # First call: new run tagged with "2026-06-10"
+    run(conn, [_Adapter("GPT-4o", resp)], cfg, run_id="run-bf-resume",
+        id_factory=ids, now_factory=lambda: NOW, rate_limiters={},
+        sleep=lambda d: None, backfill_for="2026-06-10")
+
+    assert get_run(conn, "run-bf-resume").backfill_for == "2026-06-10"
+
+    # Second call: resume with a DIFFERENT backfill_for — must be ignored
+    run(conn, [_Adapter("GPT-4o", resp)], cfg, run_id="run-bf-resume",
+        id_factory=ids, now_factory=lambda: NOW, rate_limiters={},
+        sleep=lambda d: None, backfill_for="2099-01-01")
+
+    # The original tag must still be intact
+    assert get_run(conn, "run-bf-resume").backfill_for == "2026-06-10"
+    conn.close()

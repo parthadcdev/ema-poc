@@ -9,7 +9,9 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import date
 
+from ema_poc.config import ConfigError
 from ema_poc.coverage import format_coverage_report
 from ema_poc.reporting import format_health_report, format_run_report
 
@@ -159,6 +161,15 @@ def main(argv=None, deps: Deps | None = None) -> int:
     args = _parse_args(argv)
     config = deps.load_config(args.config_dir)
 
+    backfill_for = getattr(args, "backfill_for", None)
+    if backfill_for is not None:
+        try:
+            args.backfill_for = date.fromisoformat(backfill_for).isoformat()
+        except ValueError:
+            raise ConfigError(
+                f"Invalid --backfill-for date: {backfill_for!r} (expected YYYY-MM-DD)"
+            )
+
     if args.command in ("run", "dry-run", "score", "healthcheck", "serve", "drift", "check-hallucinations"):
         deps.validate_credentials(config, deps.env)
 
@@ -265,15 +276,6 @@ def main(argv=None, deps: Deps | None = None) -> int:
         return 0
 
     # run
-    if args.backfill_for is not None:
-        import datetime as _dt
-        try:
-            _dt.date.fromisoformat(args.backfill_for)
-        except ValueError:
-            from ema_poc.config import ConfigError
-            raise ConfigError(
-                f"Invalid --backfill-for date: {args.backfill_for!r} (expected YYYY-MM-DD)"
-            )
     conn = _open_db(deps, config)
     adapters = deps.build_adapters(config, deps.env)
     summary = deps.run(
