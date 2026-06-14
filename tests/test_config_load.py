@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from ema_poc.config import load_config, ConfigError, LLMTargetConfig
+from ema_poc.config import load_config, ConfigError, LLMTargetConfig, DriftConfig
 
 
 @pytest.fixture
@@ -86,6 +86,45 @@ def test_load_config_raises_config_error_on_malformed_yaml(tmp_path: Path):
     (tmp_path / "llm_targets.yaml").write_text("targets: []\n")
     with pytest.raises(ConfigError):
         load_config(tmp_path)
+
+
+def test_drift_config_defaults():
+    """DriftConfig constructed with no arguments uses documented defaults."""
+    dc = DriftConfig()
+    assert dc.cosine_threshold == 0.85
+    assert dc.embedding_model == "text-embedding-3-small"
+    assert dc.embedding_api_key_env == "OPENAI_API_KEY"
+
+
+def test_load_config_parses_drift_block(config_dir: Path):
+    """load_config reads the drift: block from settings.yaml."""
+    # Append a drift block to the fixture settings.yaml
+    settings_file = config_dir / "settings.yaml"
+    existing = settings_file.read_text()
+    settings_file.write_text(
+        existing + "\ndrift:\n  cosine_threshold: 0.75\n  embedding_model: text-embedding-ada-002\n"
+    )
+    cfg = load_config(config_dir)
+    assert cfg.drift.cosine_threshold == 0.75
+    assert cfg.drift.embedding_model == "text-embedding-ada-002"
+    assert cfg.drift.embedding_api_key_env == "OPENAI_API_KEY"
+
+
+def test_load_config_drift_defaults_when_block_absent(tmp_path: Path):
+    """When settings.yaml has no drift: block, AppConfig.drift uses DriftConfig defaults."""
+    (tmp_path / "settings.yaml").write_text("settings:\n  db_path: x.sqlite\n")
+    (tmp_path / "llm_targets.yaml").write_text("targets: []\n")
+    cfg = load_config(tmp_path)
+    assert cfg.drift.cosine_threshold == 0.85
+    assert cfg.drift.embedding_model == "text-embedding-3-small"
+
+
+def test_load_config_real_config_dir_drift():
+    """Loading the real config/ dir yields drift.cosine_threshold == 0.85."""
+    cfg = load_config("config")
+    assert cfg.drift.cosine_threshold == 0.85
+    assert cfg.drift.embedding_model == "text-embedding-3-small"
+    assert cfg.drift.embedding_api_key_env == "OPENAI_API_KEY"
 
 
 def test_target_grounded_defaults_false_and_parses_true():

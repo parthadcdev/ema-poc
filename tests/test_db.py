@@ -53,6 +53,24 @@ def test_scores_table_has_new_columns(tmp_path):
     conn.close()
 
 
+def test_response_embeddings_table_exists(tmp_path):
+    """init_schema creates response_embeddings with expected columns."""
+    conn = connect(str(tmp_path / "t.sqlite"))
+    init_schema(conn)
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(response_embeddings)")}
+    assert cols == {"response_id", "model", "vector", "created_at"}
+    conn.close()
+
+
+def test_drift_baselines_table_exists(tmp_path):
+    """init_schema creates drift_baselines with expected columns."""
+    conn = connect(str(tmp_path / "t.sqlite"))
+    init_schema(conn)
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(drift_baselines)")}
+    assert cols == {"question_id", "llm_name", "response_id", "frozen_at"}
+    conn.close()
+
+
 def test_init_schema_migrates_missing_columns(tmp_path):
     """init_schema must ALTER in additive columns missing from a pre-existing DB."""
     import sqlite3 as _sqlite3
