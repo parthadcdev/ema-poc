@@ -104,7 +104,7 @@ def run(
             system_prompt = resolve_system_prompt(question.persona, config.settings)
             futures = {}
             for adapter in adapters:
-                if (question.question_id, adapter.name) in done:
+                if (question.question_id, adapter.name, 0) in done:
                     continue
                 futures[
                     pool.submit(

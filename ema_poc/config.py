@@ -47,6 +47,7 @@ class Settings(BaseModel):
     anthropic_api_key_env: str = "ANTHROPIC_API_KEY"
     system_prompts: dict[str, str] = Field(default_factory=dict)
     notify_webhook: str | None = None
+    samples_per_question: int = 3
 
 
 class BrandConfig(BaseModel):

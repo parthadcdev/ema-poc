@@ -119,6 +119,7 @@ def test_init_schema_migrates_missing_columns(tmp_path):
     rcols = {r["name"] for r in conn.execute("PRAGMA table_info(responses)")}
     scols = {r["name"] for r in conn.execute("PRAGMA table_info(scores)")}
     assert "provenance" in rcols
+    assert "sample_index" in rcols
     assert "confidence_level" in scols
     assert "citation_quality" in scols
 

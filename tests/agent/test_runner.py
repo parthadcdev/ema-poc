@@ -96,7 +96,7 @@ def test_run_fans_out_to_all_adapters_and_saves(tmp_path):
     assert summary.questions_attempted == 2
     assert summary.total_tokens == (10 + 20 + 5 + 5) * 2  # both questions
     assert completed_keys(conn, "run-1") == {
-        ("Q1", "GPT-4o"), ("Q1", "Gemini"), ("Q2", "GPT-4o"), ("Q2", "Gemini"),
+        ("Q1", "GPT-4o", 0), ("Q1", "Gemini", 0), ("Q2", "GPT-4o", 0), ("Q2", "Gemini", 0),
     }
     row = get_run(conn, "run-1")
     assert row.status == "COMPLETED"
@@ -115,7 +115,7 @@ def test_run_records_failed_responses(tmp_path):
     assert summary.by_status["SUCCESS"] == 2
     assert summary.by_status["FAILED"] == 2
     assert summary.failure_count == 2
-    assert completed_keys(conn, "run-1") == {("Q1", "GPT-4o"), ("Q2", "GPT-4o")}
+    assert completed_keys(conn, "run-1") == {("Q1", "GPT-4o", 0), ("Q2", "GPT-4o", 0)}
     conn.close()
 
 
@@ -139,7 +139,7 @@ def test_resume_skips_completed_and_retries_failed(tmp_path):
     # The prior FAILED Gemini rows are preserved (append-only); the new SUCCESS
     # rows make those keys complete.
     assert completed_keys(conn, "run-1") == {
-        ("Q1", "GPT-4o"), ("Q1", "Gemini"), ("Q2", "GPT-4o"), ("Q2", "Gemini"),
+        ("Q1", "GPT-4o", 0), ("Q1", "Gemini", 0), ("Q2", "GPT-4o", 0), ("Q2", "Gemini", 0),
     }
     conn.close()
 

@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS responses (
     competitive_position TEXT,
     alert_triggered      INTEGER NOT NULL DEFAULT 0,
     created_at           TEXT NOT NULL,
+    sample_index         INTEGER NOT NULL DEFAULT 0,
     provenance           TEXT,
     FOREIGN KEY (run_id) REFERENCES runs(run_id)
 );
@@ -194,6 +195,7 @@ CREATE INDEX IF NOT EXISTS idx_halluc_flags_response ON hallucination_flags(resp
 # if a pre-existing DB lacks them. All nullable / no default → safe to add.
 _ADDITIVE_COLUMNS: list[tuple[str, str, str]] = [
     ("responses", "provenance", "TEXT"),
+    ("responses", "sample_index", "INTEGER NOT NULL DEFAULT 0"),
     ("scores", "confidence_level", "TEXT"),
     ("scores", "citation_quality", "TEXT"),
     ("drift_baselines", "competitive_position", "TEXT"),

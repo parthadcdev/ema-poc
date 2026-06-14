@@ -91,6 +91,7 @@ class Response(BaseModel):
     response_text: str
     response_tokens: int | None = None
     finish_reason: str | None = None
+    sample_index: int = 0
     status: ResponseStatus
     sentiment_score: float | None = None
     competitive_position: CompetitivePosition | None = None
