@@ -154,6 +154,7 @@ body{
 }
 #f-reset:hover{border-color:var(--accent-deep);color:var(--accent-deep);background:rgba(7,29,73,.06)}
 #f-reset:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.filter-count{font-family:var(--sans);font-size:12px;color:var(--ink-faint);align-self:flex-end;padding-bottom:.45rem}
 
 /* ---- Content area ---- */
 .content{padding:1.75rem; flex:1}
@@ -1154,6 +1155,7 @@ function renderResponses(rows){
    ==================================================================== */
 function render(){
   var rows = applyFilters();
+  document.getElementById('f-count').textContent = 'Showing ' + rows.length + ' of ' + DATA.records.length;
   showSection(STATE.section);
   switch(STATE.section){
     case 'overview':   renderOverview(rows);   break;
@@ -1210,6 +1212,7 @@ def render_dashboard_html(dataset: dict, *, playground_url: str | None = None) -
         "<label>From<input type='date' id='f-from'></label>"
         "<label>To<input type='date' id='f-to'></label>"
         "<button id='f-reset'>Reset</button>"
+        "<span id='f-count' class='filter-count'></span>"
         "</div>"
     )
 

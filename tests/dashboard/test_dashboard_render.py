@@ -772,3 +772,9 @@ def test_dashboard_search_in_reset(html):
 def test_dashboard_search_clear_event_wired(html):
     # native search ✕ fires a 'search' event; ensure it's wired to re-render
     assert "addEventListener('search', render)" in html
+
+
+def test_dashboard_has_result_count(html):
+    assert "id='f-count'" in html
+    assert "Showing " in html                      # render() sets "Showing N of M"
+    assert "DATA.records.length" in html           # the M in N of M
