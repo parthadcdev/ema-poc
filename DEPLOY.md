@@ -69,7 +69,7 @@ The playground makes real LLM API calls. Per-IP rate limiting is applied via `PL
 fly secrets set PLAYGROUND_MAX_QUERIES_PER_HOUR=30
 # or edit fly.toml [env] and redeploy
 ```
-Auth limits use to the password holder.
+Auth limits spend to whoever holds the password, and the per-IP hourly cap (PLAYGROUND_MAX_QUERIES_PER_HOUR) bounds runaway usage.
 
 ### Compliance
 - Third-party host with AbbVie **DEMO data only** — no PII/PHI, not production secrets (SE-004).
