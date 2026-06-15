@@ -222,6 +222,7 @@ _ADDITIVE_COLUMNS: list[tuple[str, str, str]] = [
     ("sandbox_queries", "started_at", "TEXT"),
     ("sandbox_queries", "finished_at", "TEXT"),
     ("sandbox_queries", "error_text", "TEXT"),
+    ("sandbox_responses", "brand_mentions", "TEXT"),
 ]
 
 
