@@ -90,6 +90,7 @@ def run_playground(
                         sentiment_score=result.sentiment_score,
                         competitive_position=result.competitive_position,
                         scoring_rationale=result.scoring_rationale,
+                        brand_mentions=result.brand_mentions,
                     )
                     yield {
                         "event": "score",
