@@ -574,6 +574,10 @@ button#run:disabled {
   border: 1px solid transparent;
   white-space: nowrap;
   vertical-align: middle;
+  /* Default/fallback so an unexpected status string still shows a visible chip */
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  border-color: var(--rule);
 }
 .chip-running {
   background: var(--neu-soft);
@@ -781,21 +785,48 @@ async function refreshRecent() {
 }
 
 async function openQuery(queryId) {
+  // Source of truth for "which query owns the UI". Set this FIRST so that any
+  // older in-flight openQuery loop can detect it has been superseded.
   activeQueryId = queryId;
-  let res;
-  try { res = await fetch("/api/queries/" + encodeURIComponent(queryId)); } catch (e) { return; }
-  if (!res.ok) return;
-  const data = await res.json();
+  const runBtn = document.getElementById("run");
   const banner = document.getElementById("banner");
-  renderAnswers(data.responses);
   const status = document.getElementById("status");
+
+  let res;
+  try {
+    res = await fetch("/api/queries/" + encodeURIComponent(queryId));
+  } catch (e) {
+    // Network error: only surface it if we're still the active query.
+    if (queryId !== activeQueryId) return;
+    banner.innerHTML = '<div class="err">Couldn\'t load results — try again.</div>';
+    runBtn.disabled = false;
+    status.textContent = "";
+    return;
+  }
+  // A newer openQuery/submit took over while we awaited the fetch — bail
+  // silently (the active loop owns the timer/button/results now).
+  if (queryId !== activeQueryId) return;
+  if (!res.ok) {
+    banner.innerHTML = '<div class="err">Couldn\'t load results — try again.</div>';
+    runBtn.disabled = false;
+    status.textContent = "";
+    return;
+  }
+
+  const data = await res.json();
+  // Re-check after the second await: a newer query may have taken over.
+  if (queryId !== activeQueryId) return;
+
+  renderAnswers(data.responses);
   if (data.query.status === "RUNNING") {
     status.textContent = "Running…";
+    // Lock Run while a query is being polled so the user can't compound the race.
+    runBtn.disabled = true;
     clearTimeout(pollTimer);
     pollTimer = setTimeout(() => openQuery(queryId), 2000);
   } else {
     clearTimeout(pollTimer);
-    document.getElementById("run").disabled = false;
+    runBtn.disabled = false;
     if (data.query.status === "FAILED") {
       status.textContent = "Failed.";
       banner.innerHTML = `<div class="err">${esc(data.query.error_text || "Query failed.")}</div>`;
@@ -860,7 +891,7 @@ async function submitQuestion() {
 
 document.getElementById("run").addEventListener("click", submitQuestion);
 loadTargets();
-document.addEventListener("DOMContentLoaded", refreshRecent);
+// Script runs at the end of <body>, so the DOM is ready — load immediately.
 refreshRecent();
 </script>
 </body>
