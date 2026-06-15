@@ -3,7 +3,6 @@ app is testable with fakes and no network."""
 
 from __future__ import annotations
 
-import json
 import secrets as _secrets
 import time
 from dataclasses import dataclass, field
@@ -12,14 +11,16 @@ from pathlib import Path
 from typing import Callable
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from pydantic import BaseModel
 
 from ema_poc.dashboard.dataset import collect_dataset
 from ema_poc.dashboard.render import render_dashboard_html
 from ema_poc.db import connect, init_schema
-from ema_poc.playground.service import run_playground
+from ema_poc.playground.jobs import JobManager
+from ema_poc.repositories import sandbox as S
 
 _STATIC = Path(__file__).parent / "static"
 
@@ -46,6 +47,14 @@ class WebDeps:
     scorer: Callable               # score_response-compatible callable
     db_path: str
     env: object = None             # Mapping of env vars; None means auth disabled
+    job_submit_fn: object = None   # inject inline executor in tests; None = real threads
+
+
+class AskBody(BaseModel):
+    question: str
+    persona: str | None = None
+    brand_focus: str | None = None
+    targets: list[str] | None = None
 
 
 def create_app(deps: WebDeps) -> FastAPI:
@@ -69,6 +78,22 @@ def create_app(deps: WebDeps) -> FastAPI:
 
     app = FastAPI(title="EMA Playground", dependencies=[Depends(_auth_dep)])
     app.state.rate_store = {}
+
+    app.state.jobs = JobManager(
+        db_path=deps.db_path, build_adapters_for=deps.build_adapters_for,
+        scoring_client=deps.scoring_client, scorer=deps.scorer, config=deps.config,
+        id_factory=lambda: uuid4().hex,
+        now_factory=lambda: datetime.now(timezone.utc).isoformat(),
+        max_concurrent=int((deps.env or {}).get("PLAYGROUND_MAX_CONCURRENT_JOBS", "2") or "2"),
+        submit_fn=deps.job_submit_fn)
+
+    # Startup sweep: any RUNNING row is from a process that is no longer alive.
+    _sweep_conn = connect(deps.db_path)
+    try:
+        init_schema(_sweep_conn)
+        S.sweep_stale_running(_sweep_conn, finished_at=datetime.now(timezone.utc).isoformat())
+    finally:
+        _sweep_conn.close()
 
     @app.get("/")
     def index():
@@ -97,50 +122,58 @@ def create_app(deps: WebDeps) -> FastAPI:
             ]
         })
 
-    @app.get("/api/ask/stream")
-    def ask_stream(
-        request: Request,
-        question: str = Query(...),
-        persona: str | None = Query(None),
-        brand_focus: str | None = Query(None),
-        selected_targets: str | None = Query(None, alias="targets"),
-    ):
-        if not question or not question.strip():
+    @app.post("/api/ask", status_code=status.HTTP_202_ACCEPTED)
+    def ask(request: Request, body: AskBody):
+        if not body.question or not body.question.strip():
             raise HTTPException(status_code=400, detail="question is required")
-
         cap = int((deps.env or {}).get("PLAYGROUND_MAX_QUERIES_PER_HOUR", "60") or "60")
         ip = request.client.host if request.client else "unknown"
         if not _check_rate(app.state.rate_store, ip, cap, time.time()):
             raise HTTPException(status_code=429, detail="Query limit reached — try again later.")
+        query_id = app.state.jobs.submit(
+            question=body.question.strip(), persona=body.persona,
+            brand_focus=body.brand_focus, selected_targets=body.targets)
+        return {"query_id": query_id}
 
-        selected = [t.strip() for t in selected_targets.split(",")] if selected_targets else None
-        cfg = deps.config
-        now = datetime.now(timezone.utc).isoformat()
-
-        def event_stream():
-            conn = connect(deps.db_path)
+    @app.get("/api/queries")
+    def list_queries():
+        conn = connect(deps.db_path)
+        try:
             init_schema(conn)
-            try:
-                adapters = deps.build_adapters_for(selected)
-                gen = run_playground(
-                    conn, adapters=adapters, scoring_client=deps.scoring_client,
-                    scorer=deps.scorer,
-                    abbvie_brands=cfg.brands.abbvie_brands,
-                    competitor_brands=cfg.brands.competitor_brands,
-                    system_prompts=cfg.settings.system_prompts,
-                    question_text=question.strip(), persona=persona, brand_focus=brand_focus,
-                    model=cfg.settings.scoring_model,
-                    id_factory=lambda: uuid4().hex,
-                    now=now,
-                    max_retries=cfg.settings.max_retries,
-                    backoff=cfg.settings.backoff_seconds,
-                )
-                for event in gen:
-                    yield "data: " + json.dumps(event) + "\n\n"
-            finally:
-                conn.close()
+            rows = S.list_recent_queries(conn)
+        finally:
+            conn.close()
+        return {"queries": [
+            {"query_id": q.query_id, "question_text": q.question_text, "persona": q.persona,
+             "brand_focus": q.brand_focus, "timestamp_utc": q.timestamp_utc,
+             "status": q.status, "done_count": q.done_count, "total_count": q.total_count}
+            for q in rows]}
 
-        return StreamingResponse(event_stream(), media_type="text/event-stream")
+    @app.get("/api/queries/{query_id}")
+    def query_detail(query_id: str):
+        conn = connect(deps.db_path)
+        try:
+            init_schema(conn)
+            q = S.get_query(conn, query_id)
+            if q is None:
+                raise HTTPException(status_code=404, detail="query not found")
+            responses = S.list_query_responses(conn, query_id)
+        finally:
+            conn.close()
+        return {
+            "query": {"query_id": q.query_id, "question_text": q.question_text,
+                      "persona": q.persona, "brand_focus": q.brand_focus,
+                      "status": q.status, "target_count": q.target_count,
+                      "timestamp_utc": q.timestamp_utc, "error_text": q.error_text},
+            "responses": [
+                {"llm_name": r.llm_name, "grounded": r.grounded, "status": r.status,
+                 "answer_text": r.answer_text, "tokens": r.response_tokens,
+                 "finish_reason": r.finish_reason, "sentiment_score": r.sentiment_score,
+                 "competitive_position": r.competitive_position,
+                 "scoring_rationale": r.scoring_rationale,
+                 "citations": [{"title": c.title, "url": c.url, "snippet": c.snippet}
+                               for c in r.citations]}
+                for r in responses]}
 
     app.state.deps = deps
     return app
