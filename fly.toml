@@ -20,6 +20,14 @@ primary_region = 'ams'
   auto_start_machines = true
   min_machines_running = 0
 
+# Persistent data volume mounted at /app/data, where config_deploy/settings.yaml
+# points db_path (ema_demo.sqlite). The volume SHADOWS the image's /app/data, so the
+# DB survives every redeploy (CI or local) instead of resetting to the baked snapshot.
+# Seed it once: see DEPLOY.md → "Persistent data volume". One volume = one machine.
+[mounts]
+  source = "ema_data"
+  destination = "/app/data"
+
 [[vm]]
   size = 'shared-cpu-1x'
   memory = '512mb'

@@ -57,6 +57,46 @@ fly open
 
 Share the HTTPS URL and `APP_PASSWORD` with the product owner. Login: user `abbvie`, password as set above.
 
+## Persistent data volume (seed once, survives every redeploy)
+
+The dashboard data lives in `ema_demo.sqlite`. The repo is code-only (the DB is
+gitignored), so a CI build ships an **empty** DB. To give the product owner a populated
+dashboard that **persists across redeploys**, the app mounts a Fly volume at `/app/data`
+(see `[mounts]` in `fly.toml`) and auto-seeds it on first boot.
+
+How the seed works: the demo snapshot is baked into the image at `/app/seed/ema_demo.sqlite`
+(only when `fly deploy` runs locally, where `ema_demo.sqlite` is in the build context).
+On boot, `docker-entrypoint.sh` copies it onto the volume **only if the volume has no DB
+yet**. Once seeded, the data is on the volume and every later deploy — CI or local —
+leaves it untouched.
+
+One-time setup (needs `flyctl`):
+
+```bash
+brew install flyctl && fly auth login
+
+# 1. Single machine (one volume = one machine)
+fly scale count 1 --app ema-poc --yes
+
+# 2. Create the persistent volume (1 GB, same region as the app)
+fly volumes create ema_data --size 1 --region iad --app ema-poc --yes
+
+# 3. Deploy from THIS directory so the image carries ema_demo.sqlite as the seed.
+#    The entrypoint copies it onto the empty volume on first boot.
+fly deploy
+
+# 4. Confirm
+fly logs --app ema-poc        # look for: [entrypoint] seeding /app/data/ema_demo.sqlite
+fly open                      # dashboard now shows the demo data
+```
+
+After this, pushing to `main` (GitHub Actions) redeploys the code and the **volume data
+persists** — the empty-CI-image caveat no longer applies once the volume is seeded.
+
+To re-seed with fresh data later: build a new local `ema_demo.sqlite`, then
+`fly ssh console --app ema-poc -C 'rm -f /app/data/ema_demo.sqlite'` and `fly deploy`
+(the next boot re-seeds from the baked snapshot).
+
 ## Verifying the Deployment
 
 Visiting the URL should prompt for username and password. After login, the unified app loads with **Playground** and **Dashboard** tabs.
@@ -102,7 +142,7 @@ A workflow at `.github/workflows/fly-deploy.yml` redeploys to Fly.io on every pu
 
 After that, `git push origin main` triggers a deploy automatically.
 
-**Caveat — empty dashboard from CI:** GitHub Actions builds from the committed repo, which by design has **no demo data** (`ema_demo.sqlite` is gitignored). A CI deploy ships a working, auth-gated app with an **empty dashboard** until a monitoring run populates it. To deploy *with* the baked demo snapshot, run `fly deploy` locally (steps above) — that uses your working directory as the build context. The two paths don't conflict; the most recent deploy wins.
+**Data and CI:** Once the persistent volume is seeded (see "Persistent data volume" above), GitHub Actions deploys redeploy the **code** and the volume data **persists** — the dashboard stays populated. Before the volume is seeded, a CI deploy ships an empty dashboard (the repo is code-only; `ema_demo.sqlite` is gitignored). The seed step is a one-time local `fly deploy`; after that, auto-deploy is safe and non-destructive.
 
 ### Optional local Docker smoke test
 

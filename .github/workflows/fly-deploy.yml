@@ -4,10 +4,10 @@ name: Deploy to Fly.io
 # Requires a repo secret FLY_API_TOKEN (create with: fly tokens create deploy).
 #
 # NOTE: CI checks out the repo, which by design contains NO demo data
-# (ema_demo.sqlite is gitignored). So a CI deploy ships a working app with an
-# EMPTY dashboard until a monitoring run is done. To deploy WITH the demo data,
-# run `fly deploy` locally (the data is baked in from your working directory),
-# or attach a persistent Fly volume and seed it once.
+# (ema_demo.sqlite is gitignored). Data lives on a persistent Fly volume mounted
+# at /app/data (see fly.toml [mounts]); once seeded by a one-time local `fly deploy`
+# these CI deploys redeploy the code and the volume data PERSISTS. See DEPLOY.md
+# → "Persistent data volume".
 
 on:
   push:
