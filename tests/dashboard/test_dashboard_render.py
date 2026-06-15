@@ -741,3 +741,14 @@ def test_markdown_render_function_called(html):
 def test_markdown_escape_first_guard(html):
     """Structural guard: renderMarkdown escapes the whole src before parsing."""
     assert "mdEsc(src)" in html
+
+
+def test_dashboard_has_source_filter(html):
+    assert "id='f-source'" in html
+    assert ">Monitoring<" in html and ">Realtime<" in html
+    assert "r.source" in html                  # filter predicate references source
+
+
+def test_dashboard_source_badge_in_responses(html):
+    # The detail-grid provenance label, not the filter-bar <label>Source<select...
+    assert "class='dl'>Source</div>" in html

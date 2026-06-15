@@ -4,6 +4,7 @@ single score-update per sandbox response."""
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass, field
 from uuid import uuid4
@@ -112,13 +113,16 @@ def save_response_citations(
 
 def set_response_score(
     conn, *, sandbox_response_id, sentiment_score, competitive_position,
-    scoring_rationale, commit: bool = True,
+    scoring_rationale, brand_mentions=None, commit: bool = True,
 ) -> None:
     cur = conn.execute(
         """UPDATE sandbox_responses
-           SET sentiment_score = ?, competitive_position = ?, scoring_rationale = ?
+           SET sentiment_score = ?, competitive_position = ?, scoring_rationale = ?,
+               brand_mentions = ?
            WHERE sandbox_response_id = ?""",
-        (sentiment_score, competitive_position, scoring_rationale, sandbox_response_id),
+        (sentiment_score, competitive_position, scoring_rationale,
+         json.dumps(brand_mentions) if brand_mentions is not None else None,
+         sandbox_response_id),
     )
     if cur.rowcount == 0:
         raise ValueError(f"No sandbox_response with id={sandbox_response_id!r}")

@@ -15,6 +15,7 @@ class FakeAdapter:
 
 class FakeScore:
     sentiment_score = 0.5; competitive_position = "AMONG_OPTIONS"; scoring_rationale = "r"
+    brand_mentions = None
 
 
 def _deps(tmp_path, env=None):
