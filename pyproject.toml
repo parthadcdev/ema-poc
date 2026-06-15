@@ -27,6 +27,12 @@ ema = "ema_poc.cli:main"
 [tool.setuptools.packages.find]
 include = ["ema_poc*"]
 
+# Ship non-Python assets inside the installed package. The playground HTML is loaded
+# at runtime via Path(__file__).parent / "static", so it must land in site-packages
+# alongside the module (a bare `pip install .` otherwise drops it → FileNotFoundError).
+[tool.setuptools.package-data]
+ema_poc = ["web/static/*"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
