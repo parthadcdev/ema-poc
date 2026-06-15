@@ -350,6 +350,46 @@ tr.detail td{background:#F8F9FC;border-left:3px solid var(--accent)}
 .trend-swatch{display:inline-flex;align-items:center;gap:.42rem;font-family:var(--sans);font-size:12px;color:var(--ink-soft)}
 .trend-swatch span{display:inline-block;width:16px;height:3px;border-radius:1px;flex-shrink:0}
 
+/* ---- Rendered Markdown (.md-scoped to avoid leaking into page chrome) ---- */
+.md{font-size:14px; color:var(--ink); line-height:1.55}
+.md > *:first-child{margin-top:0}
+.md > *:last-child{margin-bottom:0}
+.md h1,.md h2,.md h3,.md h4,.md h5,.md h6{
+  font-family:var(--serif); font-weight:600; color:var(--ink);
+  line-height:1.3; margin:.85em 0 .35em; letter-spacing:-.01em;
+}
+.md h1{font-size:1.25rem; border-bottom:1px solid var(--rule-soft); padding-bottom:.3em}
+.md h2{font-size:1.12rem}
+.md h3{font-size:1.02rem}
+.md h4,.md h5,.md h6{font-size:.95rem; color:var(--ink-soft)}
+.md p{line-height:1.55; margin:.5em 0}
+.md ul,.md ol{padding-left:1.4em; margin:.5em 0}
+.md li{margin:.2em 0; line-height:1.5}
+.md code{
+  font-family:var(--mono); font-size:.9em; background:var(--surface-2);
+  padding:.05em .35em; border-radius:3px; border:1px solid var(--rule-soft);
+}
+.md pre{
+  background:var(--surface-2); border:1px solid var(--rule-soft);
+  padding:.6rem; overflow-x:auto; border-radius:var(--radius); margin:.6em 0;
+}
+.md pre code{background:none; border:none; padding:0; font-size:.85rem; line-height:1.5}
+.md-table{
+  border-collapse:collapse; width:auto; max-width:100%; margin:.6em 0;
+  font-size:.9em; display:block; overflow-x:auto;
+}
+.md-table th,.md-table td{
+  border:1px solid var(--rule); padding:.35rem .6rem; text-align:left; vertical-align:top;
+}
+.md-table th{background:var(--surface-2); color:var(--ink); font-weight:600; white-space:nowrap}
+.md-table tbody tr:nth-child(even) td{background:rgba(240,242,247,.5)}
+.md blockquote{
+  margin:.5em 0; padding:.2em .8em; border-left:3px solid var(--accent);
+  color:var(--ink-soft);
+}
+.md a{color:var(--accent); text-decoration:none}
+.md a:hover{text-decoration:underline}
+
 /* ---- Reduced motion ---- */
 @media (prefers-reduced-motion:reduce){
   *{transition:none !important;animation:none !important}
@@ -373,6 +413,51 @@ function esc(s){
   return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
     return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
   });
+}
+
+/* ---- Minimal, XSS-safe Markdown renderer (escape-first) ---- */
+function renderMarkdown(src){
+  if (src == null) return "";
+  function mdEsc(s){ return String(s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]; }); }
+  function mdUrl(u){ u = String(u||""); return /^https?:\/\//i.test(u) ? u : "#"; }
+  function inl(s){
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function(m,t,u){
+      return '<a href="' + mdEsc(mdUrl(u)) + '" target="_blank" rel="noopener noreferrer">' + t + '</a>'; });
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
+    return s;
+  }
+  var lines = mdEsc(src).split(/\r?\n/), out = [], i = 0;
+  function cells(row){ var c = row.split('|');
+    if (c.length && c[0].trim()==='') c.shift();
+    if (c.length && c[c.length-1].trim()==='') c.pop();
+    return c.map(function(x){ return x.trim(); }); }
+  while (i < lines.length){
+    var line = lines[i];
+    if (/^```/.test(line)){ var b=[]; i++; while(i<lines.length && !/^```/.test(lines[i])){ b.push(lines[i]); i++; } i++;
+      out.push('<pre><code>'+b.join('\n')+'</code></pre>'); continue; }
+    if (/\|/.test(line) && i+1<lines.length && /-/.test(lines[i+1]) && /^[\s|:-]+$/.test(lines[i+1])){
+      var head=cells(line); i+=2; var rows=[];
+      while(i<lines.length && /\|/.test(lines[i]) && lines[i].trim()!==''){ rows.push(cells(lines[i])); i++; }
+      out.push('<table class="md-table"><thead><tr>'+head.map(function(h){return '<th>'+inl(h)+'</th>';}).join('')+
+        '</tr></thead><tbody>'+rows.map(function(r){return '<tr>'+r.map(function(c){return '<td>'+inl(c)+'</td>';}).join('')+'</tr>';}).join('')+
+        '</tbody></table>'); continue; }
+    var h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h){ out.push('<h'+h[1].length+'>'+inl(h[2])+'</h'+h[1].length+'>'); i++; continue; }
+    if (/^&gt;\s?/.test(line)){ var q=[]; while(i<lines.length && /^&gt;\s?/.test(lines[i])){ q.push(lines[i].replace(/^&gt;\s?/,'')); i++; }
+      out.push('<blockquote>'+inl(q.join(' '))+'</blockquote>'); continue; }
+    if (/^\s*[-*+]\s+/.test(line)){ var u=[]; while(i<lines.length && /^\s*[-*+]\s+/.test(lines[i])){ u.push(lines[i].replace(/^\s*[-*+]\s+/,'')); i++; }
+      out.push('<ul>'+u.map(function(it){return '<li>'+inl(it)+'</li>';}).join('')+'</ul>'); continue; }
+    if (/^\s*\d+\.\s+/.test(line)){ var o=[]; while(i<lines.length && /^\s*\d+\.\s+/.test(lines[i])){ o.push(lines[i].replace(/^\s*\d+\.\s+/,'')); i++; }
+      out.push('<ol>'+o.map(function(it){return '<li>'+inl(it)+'</li>';}).join('')+'</ol>'); continue; }
+    if (/^\s*$/.test(line)){ i++; continue; }
+    var p=[line]; i++;
+    while(i<lines.length && !/^\s*$/.test(lines[i]) && !/^(#{1,6}\s|&gt;|\s*[-*+]\s|\s*\d+\.\s|```)/.test(lines[i]) && !/\|/.test(lines[i])){ p.push(lines[i]); i++; }
+    out.push('<p>'+inl(p.join(' '))+'</p>');
+  }
+  return out.join('');
 }
 
 /* ---- Populate filter selects ---- */
@@ -948,7 +1033,7 @@ function renderMedical(rows){
         "</div>" +
         "<div class='queue-detail' id='"+detailId+"'>" +
           claimsHtml +
-          "<div class='qd-section'><div class='qd-label'>Full Response</div><div class='qd-value'>"+esc(r.response_text||'')+"</div></div>" +
+          "<div class='qd-section'><div class='qd-label'>Full Response</div><div class='md'>"+renderMarkdown(r.response_text||'')+"</div></div>" +
           "<div class='qd-section'><div class='qd-label'>Scoring Rationale</div><div class='qd-value'>"+esc(r.scoring_rationale||'')+"</div></div>" +
           signalsHtml +
           alertReasonsHtml +
@@ -1005,8 +1090,8 @@ function renderResponses(rows){
     var detail =
       "<div class='detail-grid'>" +
       "<div><div class='dl'>Question</div><div class='dv'>"+esc(qtext)+"</div></div>" +
-      "<div><div class='dl'>Response</div><div class='dv'>"+esc(r.response_text||'')+"</div></div>" +
-      "<div><div class='dl'>Scoring Rationale</div><div class='dv'>"+esc(rationale)+"</div></div>" +
+      "<div><div class='dl'>Response</div><div class='md'>"+renderMarkdown(r.response_text||'')+"</div></div>" +
+      "<div><div class='dl'>Scoring Rationale</div><div class='md'>"+renderMarkdown(rationale)+"</div></div>" +
       "</div>";
     body += "<tr class='detail' style='display:none'><td colspan='11'>"+detail+"</td></tr>";
   });
