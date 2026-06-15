@@ -4,9 +4,16 @@ WORKDIR /app
 COPY pyproject.toml ./
 COPY ema_poc ./ema_poc
 RUN pip install --no-cache-dir .
-# config (committed) + demo data (from local build context; gitignored, NOT committed)
+# config (committed)
 COPY config_deploy ./config_deploy
-COPY ema_demo.sqlite /app/data/ema_demo.sqlite
+# Optional demo data: baked in for a local `fly deploy` (ema_demo.sqlite is present in
+# the build context); ABSENT for a CI checkout (the data is gitignored / not in the
+# repo), in which case the app creates an empty DB at startup and the dashboard shows
+# empty states until a run is done. The guaranteed pyproject.toml source keeps COPY
+# from failing when ema_demo.sqlite is absent; it is then removed.
+RUN mkdir -p /app/data
+COPY pyproject.toml ema_demo.sqlit[e] /app/data/
+RUN rm -f /app/data/pyproject.toml
 ENV PORT=8080 PLAYGROUND_MAX_QUERIES_PER_HOUR=60
 EXPOSE 8080
 CMD ["ema", "serve", "--config-dir", "config_deploy", "--host", "0.0.0.0", "--port", "8080"]
