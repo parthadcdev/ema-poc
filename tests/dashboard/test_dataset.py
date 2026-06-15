@@ -336,10 +336,10 @@ class TestUnscoredRecord:
 
 
 class TestExactKeyContract:
-    """Verify every record has exactly the 22 required keys."""
+    """Verify every record has exactly the 24 required keys."""
 
     REQUIRED_KEYS = {
-        "response_id", "timestamp_utc", "date", "llm_name", "grounded",
+        "response_id", "source", "timestamp_utc", "date", "llm_name", "grounded",
         "persona", "question_id", "question_text", "therapeutic_area",
         "brand_focus", "domain", "status", "response_text",
         "sentiment_score", "competitive_position", "confidence_level",

@@ -139,6 +139,7 @@ def collect_dataset(
 
         record: dict = {
             "response_id": rid,
+            "source": "monitoring",
             "timestamp_utc": ts,
             "date": ts[:10],
             "llm_name": llm_name,
@@ -163,6 +164,58 @@ def collect_dataset(
             "alert_triggered": len(reasons) > 0,
         }
         records.append(record)
+
+    # ------------------------------------------------------------------ #
+    # 7. Realtime playground (sandbox) responses — folded in, tagged      #
+    # ------------------------------------------------------------------ #
+    sandbox_rows = conn.execute(
+        """
+        SELECT sr.sandbox_response_id, sr.query_id, sr.llm_name, sr.grounded,
+               sr.answer_text, sr.status, sr.sentiment_score, sr.competitive_position,
+               sr.scoring_rationale, sr.brand_mentions,
+               q.timestamp_utc, q.question_text, q.persona, q.brand_focus
+        FROM sandbox_responses sr
+        JOIN sandbox_queries q ON sr.query_id = q.query_id
+        ORDER BY q.timestamp_utc ASC, sr.sandbox_response_id ASC
+        """
+    ).fetchall()
+    for row in sandbox_rows:
+        d = dict(row)
+        ts = d["timestamp_utc"] or ""
+        sentiment_score = d["sentiment_score"]
+        if sentiment_score is not None:
+            sentiment_score = float(sentiment_score)
+        raw_bm = d.get("brand_mentions") or ""
+        try:
+            bm = json.loads(raw_bm) if raw_bm.strip() else []
+        except (json.JSONDecodeError, AttributeError):
+            bm = []
+        records.append({
+            "response_id": "sb-" + d["sandbox_response_id"],
+            "timestamp_utc": ts,
+            "date": ts[:10],
+            "llm_name": d["llm_name"],
+            "grounded": bool(d["grounded"]),
+            "persona": d["persona"],
+            "question_id": d["query_id"],
+            "question_text": d["question_text"],
+            "therapeutic_area": None,
+            "brand_focus": d["brand_focus"],
+            "domain": None,
+            "status": d["status"],
+            "response_text": d["answer_text"],
+            "sentiment_score": sentiment_score,
+            "competitive_position": d["competitive_position"] or None,
+            "confidence_level": None,
+            "citation_quality": None,
+            "brand_mentions": bm,
+            "scoring_rationale": d["scoring_rationale"] or None,
+            "hallucination_risk": None,
+            "hallucination_flags": [],
+            "alert_reasons": [],
+            "alert_triggered": False,
+            "source": "realtime",
+        })
 
     return {
         "generated_at": now,
