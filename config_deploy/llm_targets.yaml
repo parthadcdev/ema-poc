@@ -1,0 +1,51 @@
+targets:
+  - name: GPT-5.5
+    adapter: openai
+    model_version: gpt-5.5-2026-04-23   # IN-103: pinned reasoning model
+    api_key_env: OPENAI_API_KEY
+    params: {max_completion_tokens: 4096}   # reasoning model: no temperature, max_completion_tokens
+    pricing: {input_per_1k: 0.00125, output_per_1k: 0.01}   # NOTE: confirm GPT-5.5 pricing
+    rate_limit: {requests_per_minute: 60, tokens_per_minute: 90000}
+
+  - name: Gemini-2.5-Pro
+    adapter: gemini
+    model_version: gemini-2.5-pro       # IN-103: pinned (1.5-pro retired by Google 2026)
+    api_key_env: GOOGLE_API_KEY
+    params: {temperature: 0.3, max_output_tokens: 4096}   # IN-203 (2.5-pro is a reasoning model; needs headroom for thinking + answer)
+    pricing: {input_per_1k: 0.00125, output_per_1k: 0.01}
+    rate_limit: {requests_per_minute: 60, tokens_per_minute: 90000}
+
+  - name: Claude-Opus-4.8
+    adapter: claude
+    model_version: claude-opus-4-8      # IN-301 monitored Claude target (NOT the orchestrator)
+    api_key_env: ANTHROPIC_API_KEY
+    params: {max_tokens: 4096}          # IN-303: adaptive thinking, NO temperature
+    pricing: {input_per_1k: 0.005, output_per_1k: 0.025}
+    rate_limit: {requests_per_minute: 50, tokens_per_minute: 80000}
+
+  - name: GPT-5.5-Grounded
+    adapter: openai
+    model_version: gpt-5.5-2026-04-23
+    api_key_env: OPENAI_API_KEY
+    grounded: true
+    params: {max_completion_tokens: 4096}
+    pricing: {input_per_1k: 0.00125, output_per_1k: 0.01}   # NOTE: web_search billed separately
+    rate_limit: {requests_per_minute: 60, tokens_per_minute: 90000}
+
+  - name: Gemini-2.5-Pro-Grounded
+    adapter: gemini
+    model_version: gemini-2.5-pro
+    api_key_env: GOOGLE_API_KEY
+    grounded: true
+    params: {temperature: 0.3, max_output_tokens: 4096}
+    pricing: {input_per_1k: 0.00125, output_per_1k: 0.01}  # NOTE: grounding billed separately
+    rate_limit: {requests_per_minute: 60, tokens_per_minute: 90000}
+
+  - name: Claude-Opus-4.8-Grounded
+    adapter: claude
+    model_version: claude-opus-4-8
+    api_key_env: ANTHROPIC_API_KEY
+    grounded: true
+    params: {max_tokens: 4096}
+    pricing: {input_per_1k: 0.005, output_per_1k: 0.025}   # NOTE: web_search billed separately
+    rate_limit: {requests_per_minute: 50, tokens_per_minute: 80000}

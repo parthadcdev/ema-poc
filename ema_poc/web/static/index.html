@@ -56,49 +56,76 @@ body {
   min-height: 100vh;
 }
 
-/* ---- Header ---- */
-header {
+/* ---- Shared app-nav bar (consistent with dashboard) ---- */
+.appbar {
   background: var(--accent-deep);
   color: #fff;
-  padding: .85rem 1.6rem;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 1rem;
+  padding: 0 1.6rem;
   box-shadow: 0 1px 8px -4px rgba(7, 29, 73, 0.5);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 11;
+}
+.appbar-title {
+  font-family: var(--serif);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: #FFFFFF;
+  padding: .9rem 0;
+  white-space: nowrap;
+}
+.apptabs {
+  display: flex;
+  align-items: stretch;
+  gap: .25rem;
+}
+.apptab {
+  display: inline-flex;
+  align-items: center;
+  color: rgba(255, 255, 255, .78);
+  text-decoration: none;
+  font-family: var(--sans);
+  font-size: .85rem;
+  font-weight: 500;
+  letter-spacing: .01em;
+  padding: 1rem .9rem;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color .15s, border-color .15s;
+}
+.apptab:hover { color: #fff; }
+.apptab.active {
+  color: #fff;
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+.apptab:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, .7);
+  outline-offset: -2px;
+}
+
+/* ---- Header (page subtitle below the app bar) ---- */
+header {
+  background: var(--accent-deep);
+  color: #fff;
+  padding: 0 1.6rem .85rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 header h1 {
   margin: 0;
-  font-family: var(--serif);
-  font-size: 1.2rem;
-  font-weight: 600;
-  letter-spacing: -.01em;
-  flex: 1;
-  color: #FFFFFF;
-}
-.navlink {
-  color: rgba(255, 255, 255, .88);
-  text-decoration: none;
   font-family: var(--sans);
-  font-size: .8rem;
-  font-weight: 500;
+  font-size: .85rem;
+  font-weight: 400;
   letter-spacing: .01em;
-  padding: .35rem .9rem;
-  border: 1px solid rgba(255, 255, 255, .35);
-  border-radius: var(--radius);
-  white-space: nowrap;
-  transition: background .15s, color .15s, border-color .15s;
-}
-.navlink:hover {
-  background: rgba(255, 255, 255, .15);
-  color: #fff;
-  border-color: rgba(255, 255, 255, .6);
-}
-.navlink:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, .7);
-  outline-offset: 2px;
+  flex: 1;
+  color: rgba(255, 255, 255, .82);
 }
 
 /* ---- Main layout ---- */
@@ -477,9 +504,15 @@ button#run:disabled {
 </style>
 </head>
 <body>
+<div class="appbar">
+  <span class="appbar-title">Evidence Monitoring Agent</span>
+  <nav class="apptabs">
+    <a href="/" class="apptab active">Playground</a>
+    <a href="/dashboard" class="apptab">Dashboard</a>
+  </nav>
+</div>
 <header>
-  <h1>Evidence Monitoring &mdash; Real-Time Playground</h1>
-  <a href="/dashboard" class="navlink">Dashboard &rarr;</a>
+  <h1>Real-Time Playground</h1>
 </header>
 <main>
   <div class="panel">
