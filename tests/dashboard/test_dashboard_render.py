@@ -741,3 +741,20 @@ def test_markdown_render_function_called(html):
 def test_markdown_escape_first_guard(html):
     """Structural guard: renderMarkdown escapes the whole src before parsing."""
     assert "mdEsc(src)" in html
+
+
+def test_dashboard_has_source_filter(html):
+    assert "id='f-source'" in html
+    assert ">Monitoring<" in html and ">Realtime<" in html
+    assert "r.source" in html                  # filter predicate references source
+
+
+def test_dashboard_source_badge_in_responses(html):
+    assert ">Source<" in html                  # provenance label in the Responses detail
+
+
+def test_dashboard_still_self_contained_with_source(html):
+    for marker in ["http://", "https://"]:
+        for line in html.splitlines():
+            if marker in line:
+                assert "www.w3.org/2000/svg" in line, f"external resource: {line.strip()}"

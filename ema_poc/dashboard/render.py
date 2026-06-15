@@ -505,6 +505,7 @@ function applyFilters(){
   const brand   = document.getElementById('f-brand').value;
   const llm     = document.getElementById('f-llm').value;
   const persona = document.getElementById('f-persona').value;
+  const source  = document.getElementById('f-source').value;
   const from    = document.getElementById('f-from').value;
   const to      = document.getElementById('f-to').value;
   return DATA.records.filter(function(r){
@@ -512,6 +513,7 @@ function applyFilters(){
     if(brand   && r.brand_focus      !== brand) return false;
     if(llm     && r.llm_name         !== llm)   return false;
     if(persona && r.persona          !== persona) return false;
+    if(source && r.source !== source)           return false;
     if(from    && r.date < from)                return false;
     if(to      && r.date > to)                  return false;
     return true;
@@ -532,7 +534,7 @@ document.querySelectorAll('.sidenav a[data-section]').forEach(function(link){
 });
 
 /* ---- Filter events ---- */
-document.querySelectorAll('#f-ta,#f-brand,#f-llm,#f-persona,#f-from,#f-to').forEach(function(el){
+document.querySelectorAll('#f-ta,#f-brand,#f-llm,#f-persona,#f-source,#f-from,#f-to').forEach(function(el){
   el.addEventListener('change', render);
   el.addEventListener('input', render);
 });
@@ -541,6 +543,7 @@ document.getElementById('f-reset').addEventListener('click', function(){
   document.getElementById('f-brand').value   = '';
   document.getElementById('f-llm').value     = '';
   document.getElementById('f-persona').value = '';
+  document.getElementById('f-source').value  = '';
   document.getElementById('f-from').value    = '';
   document.getElementById('f-to').value      = '';
   render();
@@ -1105,6 +1108,7 @@ function renderResponses(rows){
     var detail =
       "<div class='detail-grid'>" +
       "<div><div class='dl'>Question</div><div class='dv'>"+esc(qtext)+"</div></div>" +
+      "<div><div class='dl'>Source</div><div class='dv'>"+esc(r.source==='realtime'?'Realtime':'Monitoring')+"</div></div>" +
       "<div><div class='dl'>Response</div><div class='md'>"+renderMarkdown(r.response_text||'')+"</div></div>" +
       "<div><div class='dl'>Scoring Rationale</div><div class='md'>"+renderMarkdown(rationale)+"</div></div>" +
       "</div>";
@@ -1185,6 +1189,9 @@ def render_dashboard_html(dataset: dict, *, playground_url: str | None = None) -
         "<label>Brand<select id='f-brand'><option value=''>All</option></select></label>"
         "<label>LLM<select id='f-llm'><option value=''>All</option></select></label>"
         "<label>Persona<select id='f-persona'><option value=''>All</option></select></label>"
+        "<label>Source<select id='f-source'><option value=''>All</option>"
+        "<option value='monitoring'>Monitoring</option>"
+        "<option value='realtime'>Realtime</option></select></label>"
         "<label>From<input type='date' id='f-from'></label>"
         "<label>To<input type='date' id='f-to'></label>"
         "<button id='f-reset'>Reset</button>"
