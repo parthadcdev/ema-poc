@@ -1,20 +1,25 @@
-app = "ema-poc"
-primary_region = "iad"
+# fly.toml app configuration file generated for ema-poc on 2026-06-15T16:49:42Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'ema-poc'
+primary_region = 'ams'
 
 [build]
 
 [env]
-  PORT = "8080"
-  PLAYGROUND_MAX_QUERIES_PER_HOUR = "60"
-  APP_USER = "abbvie"
+  APP_USER = 'abbvie'
+  PLAYGROUND_MAX_QUERIES_PER_HOUR = '60'
+  PORT = '8080'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
+  size = 'shared-cpu-1x'
+  memory = '512mb'
