@@ -6,25 +6,32 @@
 <title>EMA Playground</title>
 <style>
 /* ---- Design tokens (shared with dashboard) ---- */
+/* AbbVie brand palette:
+   --accent-deep / --accent: #071D49  AbbVie primary navy (logo + chrome)
+   --accent-mid:             #0A2B6E  navy hover (lighter navy)
+   Magenta accent:           #C8102E  AbbVie signature crimson-magenta (buttons, active, links)
+   Source: faithful approximation of AbbVie corporate identity; abbvie.com returned 403 for all
+   fetch attempts, so hex values are derived from the widely documented AbbVie brand guidelines
+   (primary navy #071D49, brand red/magenta #C8102E). */
 :root {
-  --paper: #efe9dc;
-  --surface: #fbf9f4;
-  --surface-2: #f5f1e8;
-  --ink: #1d2b27;
-  --ink-soft: #5f635c;
-  --ink-faint: #8c8a7e;
-  --rule: #ddd5c4;
-  --rule-soft: #e7e0d2;
-  --accent: #1f5c4d;
-  --accent-deep: #143b31;
-  --accent-mid: #2a7a66;
-  /* Semantic sentiment scale */
-  --pos: #2f7d5b;
-  --pos-soft: #dcebe0;
-  --neu: #a9791a;
-  --neu-soft: #f0e6cf;
-  --neg: #9f3a2f;
-  --neg-soft: #f2ddd6;
+  --paper: #F0F2F7;
+  --surface: #FFFFFF;
+  --surface-2: #F4F5F9;
+  --ink: #0D1B3E;
+  --ink-soft: #3D4766;
+  --ink-faint: #7E85A3;
+  --rule: #CDD1E0;
+  --rule-soft: #DDE0EC;
+  --accent: #C8102E;
+  --accent-deep: #071D49;
+  --accent-mid: #A50D26;
+  /* Semantic sentiment scale — kept visually distinct from brand navy/magenta */
+  --pos: #1A7A4A;
+  --pos-soft: #D4EED9;
+  --neu: #A07010;
+  --neu-soft: #F5E8C8;
+  --neg: #C8102E;
+  --neg-soft: #FAD9DE;
   /* Typography */
   --serif: "Iowan Old Style", "Hoefler Text", Georgia, "Times New Roman", serif;
   --sans: ui-sans-serif, -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
@@ -32,8 +39,8 @@
   /* Radii / shadows */
   --radius: 4px;
   --radius-lg: 8px;
-  --shadow-sm: 0 1px 3px rgba(20, 40, 33, 0.08), 0 1px 2px rgba(20, 40, 33, 0.04);
-  --shadow-card: 0 1px 0 rgba(20, 40, 33, 0.03), 0 10px 24px -20px rgba(20, 40, 33, 0.45);
+  --shadow-sm: 0 1px 3px rgba(7, 29, 73, 0.08), 0 1px 2px rgba(7, 29, 73, 0.04);
+  --shadow-card: 0 1px 0 rgba(7, 29, 73, 0.03), 0 10px 24px -20px rgba(7, 29, 73, 0.32);
 }
 
 /* ---- Reset ---- */
@@ -56,7 +63,7 @@ header {
   display: flex;
   align-items: center;
   gap: 1rem;
-  box-shadow: 0 1px 8px -4px rgba(20, 40, 33, 0.4);
+  box-shadow: 0 1px 8px -4px rgba(7, 29, 73, 0.5);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -68,7 +75,7 @@ header h1 {
   font-weight: 600;
   letter-spacing: -.01em;
   flex: 1;
-  color: #f2efe6;
+  color: #FFFFFF;
 }
 .navlink {
   color: rgba(255, 255, 255, .75);
@@ -129,8 +136,8 @@ textarea {
 textarea::placeholder { color: var(--ink-faint); }
 textarea:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(31, 92, 77, .14);
+  border-color: var(--accent-deep);
+  box-shadow: 0 0 0 3px rgba(7, 29, 73, .12);
   background: var(--surface);
 }
 
@@ -172,8 +179,8 @@ select, input[type="text"] {
 }
 select:focus, input[type="text"]:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(31, 92, 77, .14);
+  border-color: var(--accent-deep);
+  box-shadow: 0 0 0 3px rgba(7, 29, 73, .12);
 }
 
 /* ---- Targets row ---- */
@@ -221,7 +228,7 @@ button#run {
   padding: .5rem 1.25rem;
   cursor: pointer;
   transition: background .15s, transform .1s;
-  box-shadow: 0 1px 3px rgba(20, 40, 33, .2);
+  box-shadow: 0 1px 3px rgba(200, 16, 46, .28);
 }
 button#run:hover { background: var(--accent-mid); }
 button#run:active { transform: scale(.97); }
@@ -273,7 +280,7 @@ button#run:disabled {
 .err {
   background: var(--neg-soft);
   color: var(--neg);
-  border: 1px solid #e3c2b8;
+  border: 1px solid #F4A8B5;
   padding: .65rem 1rem;
   border-radius: var(--radius);
   font-size: .875rem;
@@ -296,7 +303,7 @@ button#run:disabled {
   box-shadow: var(--shadow-card);
   transition: box-shadow .15s;
 }
-.card:hover { box-shadow: 0 4px 16px -8px rgba(20, 40, 33, .25); }
+.card:hover { box-shadow: 0 4px 16px -8px rgba(7, 29, 73, .22); }
 .card h3 {
   margin: 0 0 .3rem;
   font-family: var(--serif);
@@ -316,9 +323,9 @@ button#run:disabled {
   font-size: .65rem;
   letter-spacing: .05em;
   text-transform: uppercase;
-  background: rgba(31, 92, 77, .1);
-  color: var(--accent);
-  border: 1px solid rgba(31, 92, 77, .2);
+  background: rgba(7, 29, 73, .08);
+  color: var(--accent-deep);
+  border: 1px solid rgba(7, 29, 73, .18);
   border-radius: 999px;
   padding: .1rem .45rem;
   vertical-align: middle;
@@ -341,8 +348,8 @@ button#run:disabled {
 .chip[style*="#d6f5d6"],
 .chip[style*="#e6f0ff"] {
   background: var(--pos-soft) !important;
-  color: #1f5a3e !important;
-  border-color: #bcd9c5 !important;
+  color: #14593A !important;
+  border-color: #A8D9BA !important;
   /* inline style overrides handled below via JS-injected colors */
 }
 /* Score chips use surface */
@@ -377,10 +384,10 @@ button#run:disabled {
   color: var(--ink-faint);
 }
 .citations a {
-  color: var(--accent);
+  color: var(--accent-deep);
   text-decoration: none;
 }
-.citations a:hover { text-decoration: underline; }
+.citations a:hover { text-decoration: underline; color: var(--accent); }
 .citations ul {
   margin: .3rem 0 0;
   padding-left: 1.2rem;
