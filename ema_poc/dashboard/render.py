@@ -550,6 +550,7 @@ document.querySelectorAll('#f-ta,#f-brand,#f-llm,#f-persona,#f-source,#f-from,#f
   el.addEventListener('change', render);
   el.addEventListener('input', render);
 });
+document.getElementById('f-search').addEventListener('search', render);
 document.getElementById('f-reset').addEventListener('click', function(){
   document.getElementById('f-ta').value      = '';
   document.getElementById('f-brand').value   = '';

@@ -767,3 +767,8 @@ def test_dashboard_search_helper_and_predicate(html):
 
 def test_dashboard_search_in_reset(html):
     assert "getElementById('f-search').value" in html
+
+
+def test_dashboard_search_clear_event_wired(html):
+    # native search ✕ fires a 'search' event; ensure it's wired to re-render
+    assert "addEventListener('search', render)" in html
