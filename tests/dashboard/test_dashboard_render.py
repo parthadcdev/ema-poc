@@ -694,22 +694,34 @@ def test_medical_self_contained(medical_html):
 
 
 # ---------------------------------------------------------------------------
-# Back-link (playground_url kwarg)
+# Shared app-nav bar (Playground / Dashboard tabs)
 # ---------------------------------------------------------------------------
 
-def test_render_includes_back_link_when_playground_url():
-    """When playground_url is provided, the back-link appears with correct href."""
+def test_render_has_appbar(html):
+    """The shared app-nav bar is present on the dashboard."""
+    assert 'class="appbar"' in html
+    assert "Evidence Monitoring Agent" in html
+
+
+def test_render_dashboard_tab_active(html):
+    """The Dashboard tab is the active view; both tab hrefs are present."""
+    assert 'href="/dashboard" class="apptab active">Dashboard' in html
+    # Playground tab present and not active
+    assert '<a href="/" class="apptab">Playground' in html
+
+
+def test_render_playground_tab_honors_playground_url():
+    """The Playground tab points to playground_url when provided."""
     result = render_dashboard_html(_dataset(), playground_url="/")
-    # HTML entity form produced by the renderer
-    assert "← Playground" in result or "&larr; Playground" in result
-    assert 'href="/"' in result
-    assert 'class="backlink"' in result
+    assert '<a href="/" class="apptab">Playground' in result
+    # Dashboard tab remains the active view
+    assert 'class="apptab active">Dashboard' in result
 
 
-def test_render_omits_back_link_by_default():
-    """When playground_url is not provided, no back-link appears."""
+def test_render_playground_tab_defaults_to_root():
+    """Without playground_url, the Playground tab defaults to '/'."""
     result = render_dashboard_html(_dataset())
-    assert 'class="backlink"' not in result
+    assert '<a href="/" class="apptab">Playground' in result
 
 
 # ---------------------------------------------------------------------------

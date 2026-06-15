@@ -41,6 +41,7 @@ _CSS = """<style>
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   /* Layout */
   --nav-w:220px;
+  --appbar-h:3.45rem;
   --radius:4px;
   --shadow-card:0 1px 0 rgba(7,29,73,.03),0 10px 24px -20px rgba(7,29,73,.32);
 }
@@ -51,11 +52,33 @@ body{
   background:var(--paper); display:flex; min-height:100vh;
 }
 
+/* ---- Shared app-nav bar (consistent with playground) ---- */
+.appbar{
+  background:var(--accent-deep); color:#fff;
+  display:flex; align-items:center; justify-content:space-between; gap:1rem;
+  padding:0 1.6rem; position:fixed; top:0; left:0; right:0; height:var(--appbar-h);
+  z-index:20; box-shadow:0 1px 8px -4px rgba(7,29,73,.5);
+}
+.appbar-title{
+  font-family:var(--serif); font-size:1.05rem; font-weight:600;
+  letter-spacing:-.01em; color:#FFFFFF; padding:.9rem 0; white-space:nowrap;
+}
+.apptabs{display:flex; align-items:stretch; gap:.25rem}
+.apptab{
+  display:inline-flex; align-items:center; color:rgba(255,255,255,.78);
+  text-decoration:none; font-family:var(--sans); font-size:.85rem; font-weight:500;
+  letter-spacing:.01em; padding:1rem .9rem; border-bottom:2px solid transparent;
+  white-space:nowrap; transition:color .15s,border-color .15s;
+}
+.apptab:hover{color:#fff}
+.apptab.active{color:#fff; font-weight:600; border-bottom-color:var(--accent)}
+.apptab:focus-visible{outline:2px solid rgba(255,255,255,.7); outline-offset:-2px}
+
 /* ---- Side-nav ---- */
 .sidenav{
   width:var(--nav-w); min-width:var(--nav-w); max-width:var(--nav-w);
-  background:var(--accent-deep); position:fixed; top:0; left:0;
-  height:100vh; overflow-y:auto; display:flex; flex-direction:column;
+  background:var(--accent-deep); position:fixed; top:var(--appbar-h); left:0;
+  height:calc(100vh - var(--appbar-h)); overflow-y:auto; display:flex; flex-direction:column;
   z-index:10;
 }
 .sidenav .nav-brand{
@@ -88,14 +111,15 @@ body{
 
 /* ---- Main area ---- */
 .main-wrap{
-  margin-left:var(--nav-w); flex:1; display:flex; flex-direction:column;
-  min-height:100vh;
+  margin-left:var(--nav-w); margin-top:var(--appbar-h); flex:1;
+  display:flex; flex-direction:column;
+  min-height:calc(100vh - var(--appbar-h));
 }
 
 /* ---- Global header + filter bar ---- */
 .top-bar{
   background:var(--surface); border-bottom:1px solid var(--rule);
-  padding:1rem 1.75rem; position:sticky; top:0; z-index:5;
+  padding:1rem 1.75rem; position:sticky; top:var(--appbar-h); z-index:5;
   box-shadow:0 1px 8px -4px rgba(7,29,73,.18);
 }
 .top-bar h1{
@@ -226,15 +250,6 @@ tr.detail td{background:#F8F9FC;border-left:3px solid var(--accent)}
 
 /* ---- Empty state ---- */
 .empty{color:var(--ink-faint);font-style:italic;font-family:var(--serif);margin:.5rem 0;font-size:14px}
-
-/* ---- Back-link (cross-nav to playground) ---- */
-.backlink{
-  display:inline-block; margin:.7rem 1.75rem .25rem; font-size:13px;
-  color:var(--ink-faint); text-decoration:none; font-family:var(--sans);
-  letter-spacing:.01em; transition:color .15s;
-}
-.backlink:hover{color:var(--accent); text-decoration:underline}
-.backlink:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
 
 /* ---- Placeholder section ---- */
 .placeholder{
@@ -1143,20 +1158,25 @@ def render_dashboard_html(dataset: dict, *, playground_url: str | None = None) -
     `dataset` must be the shape produced by `collect_dataset`:
     { generated_at, abbvie_brands, competitor_brands, records: [...] }
 
-    When `playground_url` is not None, renders a small back-link near the top
-    of the body (above the masthead). When None the output is byte-identical to
-    the no-kwarg call (backward-compatible).
+    A shared top app-nav bar (Playground / Dashboard tabs) is rendered as the
+    first element of the body. The Dashboard tab is the active view; the
+    Playground tab links to `playground_url` when provided, else "/".
     """
     # Embed JSON safely: escape </ to prevent injection through </script>
     embedded_json = json.dumps(dataset, ensure_ascii=False).replace("</", r"<\/")
 
     generated_at = _e(dataset.get("generated_at") or "")
 
-    # Back-link rendered only when playground_url is provided
-    backlink = (
-        "<a href=\"" + _e(playground_url) + "\" class=\"backlink\">&larr; Playground</a>"
-        if playground_url is not None
-        else ""
+    # Shared app-nav bar — Playground tab is the cross-nav back-link.
+    playground_href = _e(playground_url if playground_url is not None else "/")
+    appbar = (
+        "<div class=\"appbar\">"
+        "<span class=\"appbar-title\">Evidence Monitoring Agent</span>"
+        "<nav class=\"apptabs\">"
+        "<a href=\"" + playground_href + "\" class=\"apptab\">Playground</a>"
+        "<a href=\"/dashboard\" class=\"apptab active\">Dashboard</a>"
+        "</nav>"
+        "</div>"
     )
 
     filter_bar = (
@@ -1203,12 +1223,9 @@ def render_dashboard_html(dataset: dict, *, playground_url: str | None = None) -
         _CSS,
         "</head>",
         "<body>",
+        appbar,
         nav,
         "<div class='main-wrap'>",
-    ]
-    if backlink:
-        parts.append(backlink)
-    parts += [
         "<div class='top-bar'>",
         "<h1>Evidence Monitoring Dashboard</h1>",
         filter_bar,

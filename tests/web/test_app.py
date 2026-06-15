@@ -106,15 +106,27 @@ def test_dashboard_route_serves_html(tmp_path):
     assert "text/html" in r.headers["content-type"]
     body = r.text
     assert "id='view-overview'" in body or 'id="view-overview"' in body
-    # back-link rendered as HTML entity ← or literal ←
-    assert "← Playground" in body or "&larr; Playground" in body
+    # shared app-nav bar with the Playground tab as the cross-nav back-link
+    assert 'class="appbar"' in body
+    assert 'class="apptab active">Dashboard' in body
     assert 'href="/"' in body
 
 
 def test_index_has_dashboard_link(tmp_path):
     from fastapi.testclient import TestClient
     body = TestClient(create_app(_deps(tmp_path))).get("/").text
+    # the Dashboard tab href still lives in the shared app bar
     assert 'href="/dashboard"' in body
+
+
+def test_index_has_appbar_with_active_playground_tab(tmp_path):
+    from fastapi.testclient import TestClient
+    body = TestClient(create_app(_deps(tmp_path))).get("/").text
+    assert 'class="appbar"' in body
+    assert 'href="/"' in body
+    assert 'href="/dashboard"' in body
+    # Playground tab is active on the index
+    assert 'class="apptab active">Playground' in body
 
 
 # ---------------------------------------------------------------------------
