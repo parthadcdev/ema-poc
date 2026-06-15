@@ -25,12 +25,20 @@ def test_mark_done_and_failed(tmp_path):
     qid = S.create_query(c, question_text="q", persona=None, brand_focus=None,
                          now="t0", status="RUNNING", target_count=1, started_at="t0")
     S.mark_query_done(c, qid, finished_at="t1")
-    assert S.get_query(c, qid).status == "DONE"
+    q = S.get_query(c, qid)
+    assert q.status == "DONE"
+    assert q.finished_at == "t1"
     qid2 = S.create_query(c, question_text="q2", persona=None, brand_focus=None,
                           now="t0", status="RUNNING", target_count=1, started_at="t0")
     S.mark_query_failed(c, qid2, finished_at="t1", error_text="boom")
     q2 = S.get_query(c, qid2)
     assert q2.status == "FAILED" and q2.error_text == "boom"
+
+
+def test_mark_query_done_unknown_raises(tmp_path):
+    import pytest
+    with pytest.raises(ValueError):
+        S.mark_query_done(_conn(tmp_path), "missing", finished_at="t1")
 
 
 def test_sweep_stale_running_marks_failed(tmp_path):

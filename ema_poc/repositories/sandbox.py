@@ -127,15 +127,19 @@ def set_response_score(
 
 
 def mark_query_done(conn, query_id, *, finished_at, commit: bool = True) -> None:
-    conn.execute("UPDATE sandbox_queries SET status='DONE', finished_at=? WHERE query_id=?",
-                 (finished_at, query_id))
+    cur = conn.execute("UPDATE sandbox_queries SET status='DONE', finished_at=? WHERE query_id=?",
+                       (finished_at, query_id))
+    if cur.rowcount == 0:
+        raise ValueError(f"No sandbox_query with id={query_id!r}")
     if commit:
         conn.commit()
 
 
 def mark_query_failed(conn, query_id, *, finished_at, error_text, commit: bool = True) -> None:
-    conn.execute("UPDATE sandbox_queries SET status='FAILED', finished_at=?, error_text=? "
-                 "WHERE query_id=?", (finished_at, error_text, query_id))
+    cur = conn.execute("UPDATE sandbox_queries SET status='FAILED', finished_at=?, error_text=? "
+                       "WHERE query_id=?", (finished_at, error_text, query_id))
+    if cur.rowcount == 0:
+        raise ValueError(f"No sandbox_query with id={query_id!r}")
     if commit:
         conn.commit()
 
