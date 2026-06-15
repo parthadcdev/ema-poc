@@ -86,6 +86,24 @@ fly scale count 0          # manual pause
 fly apps destroy <your-app-name>
 ```
 
+## Auto-Deploy via GitHub Actions
+
+A workflow at `.github/workflows/fly-deploy.yml` redeploys to Fly.io on every push to `main` (and on-demand via the Actions tab → "Deploy to Fly.io" → Run workflow).
+
+**One-time setup:**
+
+1. Create a deploy token (scoped to this app, not your full account):
+   ```bash
+   fly tokens create deploy
+   ```
+2. In GitHub: **Settings → Secrets and variables → Actions → New repository secret**
+   - Name: `FLY_API_TOKEN`
+   - Value: the token printed above (including the `FlyV1 ...` prefix)
+
+After that, `git push origin main` triggers a deploy automatically.
+
+**Caveat — empty dashboard from CI:** GitHub Actions builds from the committed repo, which by design has **no demo data** (`ema_demo.sqlite` is gitignored). A CI deploy ships a working, auth-gated app with an **empty dashboard** until a monitoring run populates it. To deploy *with* the baked demo snapshot, run `fly deploy` locally (steps above) — that uses your working directory as the build context. The two paths don't conflict; the most recent deploy wins.
+
 ### Optional local Docker smoke test
 
 Before deploying, verify the image locally (requires Docker):

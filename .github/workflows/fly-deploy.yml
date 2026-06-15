@@ -1,0 +1,30 @@
+name: Deploy to Fly.io
+
+# Auto-deploy on every push to main (and manually via the Actions tab).
+# Requires a repo secret FLY_API_TOKEN (create with: fly tokens create deploy).
+#
+# NOTE: CI checks out the repo, which by design contains NO demo data
+# (ema_demo.sqlite is gitignored). So a CI deploy ships a working app with an
+# EMPTY dashboard until a monitoring run is done. To deploy WITH the demo data,
+# run `fly deploy` locally (the data is baked in from your working directory),
+# or attach a persistent Fly volume and seed it once.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    name: fly deploy
+    runs-on: ubuntu-latest
+    concurrency:
+      group: fly-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
