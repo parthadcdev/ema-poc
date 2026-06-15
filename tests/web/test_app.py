@@ -67,8 +67,8 @@ def test_index_contains_playground_markers(tmp_path):
     client = TestClient(app)
     html = client.get("/").text
     assert 'id="question"' in html
-    assert "EventSource" in html
-    assert "/api/ask/stream" in html
+    assert "/api/ask" in html
+    assert "/api/queries" in html
     assert "/api/targets" in html
 
 
