@@ -195,6 +195,8 @@ def collect_dataset(
             "timestamp_utc": ts,
             "date": ts[:10],
             "llm_name": d["llm_name"],
+            # sandbox stores an explicit grounded flag (the monitoring path instead
+            # infers it from the "-Grounded" llm_name suffix) — keep this column read.
             "grounded": bool(d["grounded"]),
             "persona": d["persona"],
             "question_id": d["query_id"],

@@ -67,3 +67,10 @@ def test_realtime_record_present_and_tagged(tmp_path):
 def test_both_sources_counted(tmp_path):
     ds, _ = _ds(tmp_path)
     assert len(ds["records"]) == 2
+
+
+def test_monitoring_and_realtime_records_have_identical_keys(tmp_path):
+    ds, rid = _ds(tmp_path)
+    mon = next(r for r in ds["records"] if r["response_id"] == "m1")
+    rt = next(r for r in ds["records"] if r["response_id"] == "sb-" + rid)
+    assert set(mon.keys()) == set(rt.keys())
