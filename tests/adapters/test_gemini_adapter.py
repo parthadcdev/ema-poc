@@ -1,136 +1,143 @@
 from types import SimpleNamespace
 
-from ema_poc.adapters.gemini_adapter import GeminiAdapter
+from ema_poc.adapters.base import Citation
 
 
-class _Enum:
-    """Mimics a google enum value with a .name attribute."""
-
-    def __init__(self, name):
-        self.name = name
-
-
-class _Usage:
-    def __init__(self, p, c):
-        self.prompt_token_count = p
-        self.candidates_token_count = c
-
-
-class _Candidate:
-    def __init__(self, finish_reason_name):
-        self.finish_reason = _Enum(finish_reason_name)
-
-
-class _Feedback:
-    def __init__(self, block_reason_name):
-        self.block_reason = _Enum(block_reason_name) if block_reason_name else None
-
-
-class _GeminiResp:
-    def __init__(self, text, finish_reason_name, block_reason_name=None, p=5, c=7,
-                 model_version=None):
-        self.text = text
-        self.candidates = [_Candidate(finish_reason_name)]
-        self.prompt_feedback = _Feedback(block_reason_name)
-        self.usage_metadata = _Usage(p, c)
-        self.model_version = model_version
-
-
-class _FakeModel:
+class _FakeModels:
     def __init__(self, resp):
-        self._resp = resp
-        self.gen_config = None
+        self.resp = resp
+        self.kwargs = None
 
-    def generate_content(self, text, generation_config=None, **_kwargs):
-        self.text = text
-        self.gen_config = generation_config
-        return self._resp
+    def generate_content(self, **kwargs):
+        self.kwargs = kwargs
+        return self.resp
 
 
-def _adapter(resp, capture=None):
-    def factory(system_prompt):
-        m = _FakeModel(resp)
-        if capture is not None:
-            capture["system"] = system_prompt
-            capture["model"] = m
-        return m
+class _FakeClient:
+    def __init__(self, resp):
+        self.models = _FakeModels(resp)
+
+
+def _resp(text="answer", finish="STOP", chunks=None, model_version="gemini-2.5-pro",
+           prompt_feedback=None):
+    cand = SimpleNamespace(
+        finish_reason=SimpleNamespace(name=finish),
+        grounding_metadata=SimpleNamespace(grounding_chunks=chunks or []),
+    )
+    return SimpleNamespace(
+        text=text,
+        candidates=[cand],
+        prompt_feedback=prompt_feedback,
+        usage_metadata=SimpleNamespace(prompt_token_count=8, candidates_token_count=4),
+        model_version=model_version,
+    )
+
+
+def _adapter(client, grounded=False, params=None):
+    from ema_poc.adapters.gemini_adapter import GeminiAdapter
 
     return GeminiAdapter(
-        name="Gemini-1.5-Pro",
-        model_version="gemini-1.5-pro",
-        params={"temperature": 0.3, "max_output_tokens": 1024},
-        model_factory=factory,
+        name="Gemini",
+        model_version="gemini-2.5-pro",
+        params=params or {},
+        client=client,
+        grounded=grounded,
     )
 
 
-def test_success_response_and_tokens():
-    adapter = _adapter(_GeminiResp("Drug X is second-line.", "STOP",
-                                   model_version="gemini-1.5-pro-002"))
-    r = adapter.query("clinical context", "Is drug X first-line?")
-    assert r.status == "SUCCESS"
-    assert r.finish_reason == "stop"
-    assert r.text == "Drug X is second-line."
-    assert r.prompt_tokens == 5
-    assert r.completion_tokens == 7
-    assert r.actual_model == "gemini-1.5-pro-002"
+# ---------------------------------------------------------------------------
+# SUCCESS path
+# ---------------------------------------------------------------------------
 
-
-def test_factory_receives_system_prompt_and_config():
-    capture = {}
-    adapter = _adapter(_GeminiResp("ok", "STOP"), capture=capture)
-    adapter.query("SYSTEM", "QUESTION")
-    assert capture["system"] == "SYSTEM"
-    assert capture["model"].text == "QUESTION"
-    assert capture["model"].gen_config["temperature"] == 0.3
-    assert capture["model"].gen_config["max_output_tokens"] == 1024
-
-
-def test_safety_block_via_candidate_finish_reason():
-    adapter = _adapter(_GeminiResp("", "SAFETY"))
-    r = adapter.query("s", "q")
-    assert r.status == "BLOCKED"
-    assert r.finish_reason == "blocked"
-
-
-def test_safety_block_via_prompt_feedback():
-    adapter = _adapter(_GeminiResp("", "STOP", block_reason_name="SAFETY"))
-    r = adapter.query("s", "q")
-    assert r.status == "BLOCKED"
-
-
-def test_truncated_when_max_tokens():
-    adapter = _adapter(_GeminiResp("partial", "MAX_TOKENS"))
-    r = adapter.query("s", "q")
-    assert r.status == "TRUNCATED"
-    assert r.finish_reason == "length"
-
-
-def _grounded_gemini_resp():
-    web = SimpleNamespace(uri="https://src/g", title="Gemini Source")
-    chunk = SimpleNamespace(web=web)
-    gm = SimpleNamespace(grounding_chunks=[chunk])
-    cand = SimpleNamespace(finish_reason="STOP", grounding_metadata=gm)
-    return SimpleNamespace(
-        candidates=[cand],
-        text="Grounded gemini answer.",
-        prompt_feedback=None,
-        usage_metadata=SimpleNamespace(prompt_token_count=8, candidates_token_count=4),
-    )
-
-
-def test_gemini_grounded_passes_search_tool_and_parses_citations():
-    captured = {}
-
-    class _Model:
-        def generate_content(self, content, **kwargs):
-            captured.update(kwargs)
-            return _grounded_gemini_resp()
-
-    adapter = GeminiAdapter(
-        name="Gemini-2.5-Pro-Grounded", model_version="gemini-2.5-pro",
-        params={}, model_factory=lambda sp: _Model(), grounded=True,
-    )
-    out = adapter.query("sys", "q?")
-    assert captured.get("tools") == [{"google_search": {}}]
+def test_success_status_and_fields():
+    client = _FakeClient(_resp())
+    out = _adapter(client).query("sys", "q")
     assert out.status == "SUCCESS"
-    assert [(c.title, c.url) for c in out.citations] == [("Gemini Source", "https://src/g")]
+    assert out.text == "answer"
+    assert out.finish_reason == "stop"
+    assert out.prompt_tokens == 8
+    assert out.completion_tokens == 4
+    assert out.actual_model == "gemini-2.5-pro"
+    assert out.citations == []
+
+
+def test_ungrounded_config_has_no_tools():
+    client = _FakeClient(_resp())
+    _adapter(client).query("sys", "q")
+    cfg = client.models.kwargs["config"]
+    assert not cfg.tools  # None or empty list
+    assert client.models.kwargs["model"] == "gemini-2.5-pro"
+    assert client.models.kwargs["contents"] == "q"
+
+
+# ---------------------------------------------------------------------------
+# TRUNCATED path
+# ---------------------------------------------------------------------------
+
+def test_max_tokens_gives_truncated():
+    client = _FakeClient(_resp(finish="MAX_TOKENS"))
+    out = _adapter(client).query("s", "q")
+    assert out.status == "TRUNCATED"
+    assert out.finish_reason == "length"
+
+
+# ---------------------------------------------------------------------------
+# BLOCKED paths
+# ---------------------------------------------------------------------------
+
+def test_safety_finish_reason_blocks():
+    client = _FakeClient(_resp(text="", finish="SAFETY"))
+    out = _adapter(client).query("s", "q")
+    assert out.status == "BLOCKED"
+    assert out.text == ""
+    assert out.finish_reason == "blocked"
+
+
+def test_prompt_feedback_block_reason_blocks():
+    pf = SimpleNamespace(block_reason="SAFETY")
+    client = _FakeClient(_resp(text="", prompt_feedback=pf))
+    out = _adapter(client).query("s", "q")
+    assert out.status == "BLOCKED"
+
+
+def test_prompt_feedback_block_reason_named_blocks():
+    """A block_reason with a real .name (e.g. SAFETY) must still block."""
+    pf = SimpleNamespace(block_reason=SimpleNamespace(name="SAFETY"))
+    client = _FakeClient(_resp(text="", prompt_feedback=pf))
+    out = _adapter(client).query("s", "q")
+    assert out.status == "BLOCKED"
+
+
+def test_blocked_reason_unspecified_is_not_blocked():
+    """BLOCKED_REASON_UNSPECIFIED must NOT be treated as a real block."""
+    pf = SimpleNamespace(block_reason=SimpleNamespace(name="BLOCKED_REASON_UNSPECIFIED"))
+    client = _FakeClient(_resp(text="answer", finish="STOP", prompt_feedback=pf))
+    out = _adapter(client).query("s", "q")
+    assert out.status == "SUCCESS"
+    assert out.text == "answer"
+
+
+# ---------------------------------------------------------------------------
+# Grounded path
+# ---------------------------------------------------------------------------
+
+def test_grounded_passes_google_search_tool_and_parses_citations():
+    chunk = SimpleNamespace(web=SimpleNamespace(uri="https://src/a", title="Src A"))
+    client = _FakeClient(_resp(chunks=[chunk]))
+    out = _adapter(client, grounded=True).query("sys", "q?")
+
+    # The config passed to generate_content must carry a google_search tool
+    cfg = client.models.kwargs["config"]
+    assert cfg.tools  # non-empty
+
+    assert [(c.title, c.url) for c in out.citations] == [("Src A", "https://src/a")]
+
+
+# ---------------------------------------------------------------------------
+# actual_model captured
+# ---------------------------------------------------------------------------
+
+def test_actual_model_captured():
+    client = _FakeClient(_resp(model_version="gemini-2.5-pro-preview"))
+    out = _adapter(client).query("s", "q")
+    assert out.actual_model == "gemini-2.5-pro-preview"

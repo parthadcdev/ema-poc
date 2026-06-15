@@ -21,11 +21,10 @@ def _default_openai_client(api_key: str):
     return OpenAI(api_key=api_key)
 
 
-def _default_gemini_model(api_key: str, model_version: str, system_instruction=None):
-    import google.generativeai as genai
+def _default_gemini_client(api_key: str):
+    from google import genai
 
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel(model_version, system_instruction=system_instruction)
+    return genai.Client(api_key=api_key)
 
 
 def _default_anthropic_client(api_key: str):
@@ -39,7 +38,7 @@ def build_adapters(
     env: Mapping[str, str],
     *,
     openai_client_factory=_default_openai_client,
-    gemini_model_factory=_default_gemini_model,
+    gemini_client_factory=_default_gemini_client,
     anthropic_client_factory=_default_anthropic_client,
 ) -> list[LLMAdapter]:
     adapters: list[LLMAdapter] = []
@@ -63,9 +62,7 @@ def build_adapters(
                     name=target.name,
                     model_version=target.model_version,
                     params=target.params,
-                    model_factory=lambda system_prompt, _k=api_key, _m=target.model_version: (
-                        gemini_model_factory(_k, _m, system_prompt)
-                    ),
+                    client=gemini_client_factory(api_key),
                     grounded=target.grounded,
                 )
             )

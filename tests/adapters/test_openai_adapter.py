@@ -104,6 +104,53 @@ def test_ungrounded_returns_no_citations():
 
 
 # ---------------------------------------------------------------------------
+# Config-driven kwargs tests (GPT-5.5 / GPT-4o)
+# ---------------------------------------------------------------------------
+
+
+def test_chat_uses_max_completion_tokens_and_omits_temperature():
+    fake = _FakeOpenAI(_Completion("ok", "stop"))
+    adapter = OpenAIAdapter(
+        name="GPT-5.5",
+        model_version="gpt-5.5",
+        params={"max_completion_tokens": 4096},
+        client=fake,
+    )
+    adapter.query("sys", "q")
+    assert fake.kwargs["max_completion_tokens"] == 4096
+    assert "temperature" not in fake.kwargs
+    assert "max_tokens" not in fake.kwargs
+
+
+def test_chat_gpt4o_style_params():
+    fake = _FakeOpenAI(_Completion("ok", "stop"))
+    adapter = OpenAIAdapter(
+        name="GPT-4o",
+        model_version="gpt-4o-2024-11-20",
+        params={"temperature": 0.3, "max_tokens": 4096},
+        client=fake,
+    )
+    adapter.query("sys", "q")
+    assert fake.kwargs["temperature"] == 0.3
+    assert fake.kwargs["max_tokens"] == 4096
+    assert "max_completion_tokens" not in fake.kwargs
+
+
+def test_chat_default_max_tokens_when_empty_params():
+    fake = _FakeOpenAI(_Completion("ok", "stop"))
+    adapter = OpenAIAdapter(
+        name="GPT-4o",
+        model_version="gpt-4o",
+        params={},
+        client=fake,
+    )
+    adapter.query("sys", "q")
+    assert fake.kwargs["max_tokens"] == 1024
+    assert "temperature" not in fake.kwargs
+    assert "max_completion_tokens" not in fake.kwargs
+
+
+# ---------------------------------------------------------------------------
 # Grounded (Responses API) tests
 # ---------------------------------------------------------------------------
 

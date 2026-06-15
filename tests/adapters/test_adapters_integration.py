@@ -69,9 +69,14 @@ class _GResp:
     usage_metadata = _GUsage()
 
 
-class _FakeGeminiModel:
-    def generate_content(self, text, generation_config=None):
+class _FakeGeminiModels:
+    def generate_content(self, **kwargs):
         return _GResp()
+
+
+class _FakeGeminiClient:
+    def __init__(self):
+        self.models = _FakeGeminiModels()
 
 
 class _CBlock:
@@ -121,7 +126,7 @@ def test_all_adapters_query_and_normalize():
         _config(),
         env,
         openai_client_factory=lambda key: _FakeOpenAI(),
-        gemini_model_factory=lambda key, model, system_instruction=None: _FakeGeminiModel(),
+        gemini_client_factory=lambda key: _FakeGeminiClient(),
         anthropic_client_factory=lambda key: _FakeAnthropic(),
     )
     results = {a.name: a.query("system context", "Is drug X first-line?") for a in adapters}

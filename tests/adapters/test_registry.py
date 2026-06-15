@@ -37,9 +37,9 @@ def _fake_factories():
         seen["openai"] = api_key
         return f"openai-client::{api_key}"
 
-    def gemini_factory(api_key, model_version, system_instruction=None):
-        seen.setdefault("gemini", []).append((api_key, model_version, system_instruction))
-        return f"gemini-model::{system_instruction}"
+    def gemini_factory(api_key):
+        seen["gemini"] = api_key
+        return f"gemini-client::{api_key}"
 
     def anthropic_factory(api_key):
         seen["anthropic"] = api_key
@@ -58,7 +58,7 @@ def test_builds_one_adapter_per_enabled_target():
     seen, of, gf, af = _fake_factories()
     adapters = build_adapters(
         cfg, env,
-        openai_client_factory=of, gemini_model_factory=gf, anthropic_client_factory=af,
+        openai_client_factory=of, gemini_client_factory=gf, anthropic_client_factory=af,
     )
     assert [type(a) for a in adapters] == [
         OpenAIAdapter, GeminiAdapter, ClaudeTargetAdapter
@@ -76,22 +76,22 @@ def test_skips_disabled_targets():
     seen, of, gf, af = _fake_factories()
     adapters = build_adapters(
         cfg, env,
-        openai_client_factory=of, gemini_model_factory=gf, anthropic_client_factory=af,
+        openai_client_factory=of, gemini_client_factory=gf, anthropic_client_factory=af,
     )
     assert [a.name for a in adapters] == ["GPT-4o"]
 
 
-def test_gemini_model_factory_binds_key_and_passes_system_per_query():
+def test_gemini_client_factory_receives_api_key():
     cfg = _config([_target("Gemini", "gemini")])
     env = {"GEMINI_KEY": "k-g"}
     seen, of, gf, af = _fake_factories()
     [gemini] = build_adapters(
         cfg, env,
-        openai_client_factory=of, gemini_model_factory=gf, anthropic_client_factory=af,
+        openai_client_factory=of, gemini_client_factory=gf, anthropic_client_factory=af,
     )
-    model = gemini._model_factory("PERSONA SYSTEM")
-    assert model == "gemini-model::PERSONA SYSTEM"
-    assert seen["gemini"][-1] == ("k-g", "m", "PERSONA SYSTEM")
+    # The client stored on the adapter is whatever the factory returned
+    assert gemini._client == "gemini-client::k-g"
+    assert seen["gemini"] == "k-g"
 
 
 def test_unknown_adapter_raises():
@@ -101,7 +101,7 @@ def test_unknown_adapter_raises():
     with pytest.raises(ValueError):
         build_adapters(
             cfg, env,
-            openai_client_factory=of, gemini_model_factory=gf, anthropic_client_factory=af,
+            openai_client_factory=of, gemini_client_factory=gf, anthropic_client_factory=af,
         )
 
 
@@ -130,10 +130,15 @@ def test_build_adapters_propagates_grounded_flag():
             ),
         ],
     )
-    seen, of, gf, af = _fake_factories()
+    seen, of, af = {}, lambda k: object(), lambda k: object()
     adapters = build_adapters(
         cfg,
         {"OPENAI_API_KEY": "k-o", "GOOGLE_API_KEY": "k-g", "ANTHROPIC_API_KEY": "k-c"},
-        openai_client_factory=of, gemini_model_factory=gf, anthropic_client_factory=af,
+        openai_client_factory=of,
+        gemini_client_factory=lambda key: object(),
+        anthropic_client_factory=af,
     )
     assert all(a.grounded is True for a in adapters)
+    # Verify gemini adapter has correct model_version
+    gemini = next(a for a in adapters if isinstance(a, GeminiAdapter))
+    assert gemini.model_version == "gemini-2.5-pro"

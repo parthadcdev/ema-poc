@@ -1,5 +1,5 @@
-"""OpenAI (GPT-4o) adapter. Ungrounded: Chat Completions (IN-1). Grounded:
-Responses API with the web_search tool, returning url_citation annotations."""
+"""OpenAI adapter. Ungrounded: Chat Completions. Grounded: Responses API web_search.
+Params are config-driven (temperature optional; max_completion_tokens for reasoning models)."""
 
 from __future__ import annotations
 
@@ -20,15 +20,22 @@ class OpenAIAdapter(LLMAdapter):
         return self._query_chat(system_prompt, question_text)
 
     def _query_chat(self, system_prompt: str, question_text: str) -> LLMResponse:
-        resp = self._client.chat.completions.create(
+        kwargs = dict(
             model=self.model_version,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": question_text},
             ],
-            temperature=self.params.get("temperature", 0.3),
-            max_tokens=self.params.get("max_tokens", 1024),
         )
+        if "temperature" in self.params:
+            kwargs["temperature"] = self.params["temperature"]
+        if "max_completion_tokens" in self.params:
+            kwargs["max_completion_tokens"] = self.params["max_completion_tokens"]
+        elif "max_tokens" in self.params:
+            kwargs["max_tokens"] = self.params["max_tokens"]
+        else:
+            kwargs["max_tokens"] = 1024
+        resp = self._client.chat.completions.create(**kwargs)
         choice = resp.choices[0]
         finish = choice.finish_reason
         text = choice.message.content or ""
