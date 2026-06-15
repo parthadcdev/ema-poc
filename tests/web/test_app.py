@@ -83,6 +83,22 @@ def test_index_has_xss_escaping_helpers(tmp_path):
     assert "safeUrl(c.url" in html
 
 
+def test_index_has_markdown_renderer(tmp_path):
+    from fastapi.testclient import TestClient
+    html = TestClient(create_app(_deps(tmp_path))).get("/").text
+    # the markdown renderer is present and applied to the answer card
+    assert "function renderMarkdown" in html
+    assert "renderMarkdown(ev.answer_text" in html
+
+
+def test_index_is_self_contained(tmp_path):
+    from fastapi.testclient import TestClient
+    html = TestClient(create_app(_deps(tmp_path))).get("/").text
+    # no external scripts or stylesheets — page must be self-contained
+    assert "<script src" not in html
+    assert "<link " not in html
+
+
 def test_dashboard_route_serves_html(tmp_path):
     from fastapi.testclient import TestClient
     r = TestClient(create_app(_deps(tmp_path))).get("/dashboard")

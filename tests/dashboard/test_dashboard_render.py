@@ -710,3 +710,22 @@ def test_render_omits_back_link_by_default():
     """When playground_url is not provided, no back-link appears."""
     result = render_dashboard_html(_dataset())
     assert 'class="backlink"' not in result
+
+
+# ---------------------------------------------------------------------------
+# Markdown rendering (renderMarkdown) — JS source markers + escape-first guard
+# ---------------------------------------------------------------------------
+
+def test_markdown_render_function_present(html):
+    """The JS source must define renderMarkdown."""
+    assert "function renderMarkdown" in html
+
+
+def test_markdown_render_function_called(html):
+    """renderMarkdown must be invoked at least once when building detail panels."""
+    assert "renderMarkdown(" in html
+
+
+def test_markdown_escape_first_guard(html):
+    """Structural guard: renderMarkdown escapes the whole src before parsing."""
+    assert "mdEsc(src)" in html
