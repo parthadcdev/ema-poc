@@ -752,3 +752,18 @@ def test_dashboard_has_source_filter(html):
 def test_dashboard_source_badge_in_responses(html):
     # The detail-grid provenance label, not the filter-bar <label>Source<select...
     assert "class='dl'>Source</div>" in html
+
+
+def test_dashboard_has_search_input(html):
+    assert "id='f-search'" in html
+    assert "type='search'" in html
+
+
+def test_dashboard_search_helper_and_predicate(html):
+    assert "function _searchable" in html          # concatenates the text fields
+    assert "_searchable(" in html                  # used in the filter predicate
+    assert "f-search" in html                      # read in applyFilters
+
+
+def test_dashboard_search_in_reset(html):
+    assert "getElementById('f-search').value" in html
