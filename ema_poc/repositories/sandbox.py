@@ -18,6 +18,23 @@ class SandboxQuery:
     question_text: str
     persona: str | None
     brand_focus: str | None
+    status: str = "DONE"            # legacy NULL reads as DONE
+    target_count: int | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+    error_text: str | None = None
+
+
+@dataclass
+class QuerySummary:
+    query_id: str
+    timestamp_utc: str
+    question_text: str
+    persona: str | None
+    brand_focus: str | None
+    status: str
+    done_count: int
+    total_count: int
 
 
 @dataclass
@@ -40,13 +57,16 @@ class SandboxResponse:
 
 def create_query(
     conn, *, question_text, persona, brand_focus, now, id_factory=lambda: uuid4().hex,
+    status: str = "RUNNING", target_count: int | None = None, started_at: str | None = None,
     commit: bool = True,
 ) -> str:
     query_id = id_factory()
     conn.execute(
-        """INSERT INTO sandbox_queries (query_id, timestamp_utc, question_text, persona, brand_focus)
-           VALUES (?, ?, ?, ?, ?)""",
-        (query_id, now, question_text, persona, brand_focus),
+        """INSERT INTO sandbox_queries
+           (query_id, timestamp_utc, question_text, persona, brand_focus,
+            status, target_count, started_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (query_id, now, question_text, persona, brand_focus, status, target_count, started_at),
     )
     if commit:
         conn.commit()
@@ -106,6 +126,38 @@ def set_response_score(
         conn.commit()
 
 
+def mark_query_done(conn, query_id, *, finished_at, commit: bool = True) -> None:
+    conn.execute("UPDATE sandbox_queries SET status='DONE', finished_at=? WHERE query_id=?",
+                 (finished_at, query_id))
+    if commit:
+        conn.commit()
+
+
+def mark_query_failed(conn, query_id, *, finished_at, error_text, commit: bool = True) -> None:
+    conn.execute("UPDATE sandbox_queries SET status='FAILED', finished_at=?, error_text=? "
+                 "WHERE query_id=?", (finished_at, error_text, query_id))
+    if commit:
+        conn.commit()
+
+
+def sweep_stale_running(conn, *, finished_at, commit: bool = True) -> int:
+    cur = conn.execute(
+        "UPDATE sandbox_queries SET status='FAILED', finished_at=?, "
+        "error_text='interrupted by restart' WHERE status='RUNNING'", (finished_at,))
+    if commit:
+        conn.commit()
+    return cur.rowcount
+
+
+def get_query(conn, query_id) -> SandboxQuery | None:
+    r = conn.execute(
+        """SELECT query_id, timestamp_utc, question_text, persona, brand_focus,
+                  COALESCE(status,'DONE') AS status, target_count, started_at,
+                  finished_at, error_text
+           FROM sandbox_queries WHERE query_id = ?""", (query_id,)).fetchone()
+    return SandboxQuery(**dict(r)) if r else None
+
+
 def _citations_for(conn, sandbox_response_id) -> list[Citation]:
     rows = conn.execute(
         """SELECT title, url, snippet FROM sandbox_citations
@@ -136,10 +188,21 @@ def list_query_responses(conn, query_id) -> list[SandboxResponse]:
     return out
 
 
-def list_recent_queries(conn, limit: int = 25) -> list[SandboxQuery]:
+def list_recent_queries(conn, limit: int = 25) -> list[QuerySummary]:
     rows = conn.execute(
-        """SELECT query_id, timestamp_utc, question_text, persona, brand_focus
-           FROM sandbox_queries ORDER BY timestamp_utc DESC, query_id DESC LIMIT ?""",
-        (limit,),
-    ).fetchall()
-    return [SandboxQuery(**dict(r)) for r in rows]
+        """SELECT q.query_id, q.timestamp_utc, q.question_text, q.persona, q.brand_focus,
+                  COALESCE(q.status,'DONE') AS status, q.target_count,
+                  (SELECT COUNT(*) FROM sandbox_responses r WHERE r.query_id = q.query_id)
+                      AS done_count
+           FROM sandbox_queries q
+           ORDER BY q.timestamp_utc DESC, q.query_id DESC LIMIT ?""", (limit,)).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        total = d["target_count"] if d["target_count"] is not None else d["done_count"]
+        out.append(QuerySummary(
+            query_id=d["query_id"], timestamp_utc=d["timestamp_utc"],
+            question_text=d["question_text"], persona=d["persona"],
+            brand_focus=d["brand_focus"], status=d["status"],
+            done_count=d["done_count"], total_count=total))
+    return out
