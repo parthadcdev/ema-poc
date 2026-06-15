@@ -1,0 +1,34 @@
+# PROTOTYPE reference facts compiled from public prescribing labels.
+# Pending Medical Affairs validation — NOT authoritative. Replace with the
+# official Medical Affairs corpus (same schema) before production use.
+brands:
+  Skyrizi:
+    generic: risankizumab
+    indications: [moderate-to-severe plaque psoriasis, psoriatic arthritis, Crohn's disease, ulcerative colitis]
+    key_dosing: "150 mg subcutaneously at weeks 0 and 4, then every 12 weeks (plaque psoriasis)"
+    boxed_warnings: []
+  Rinvoq:
+    generic: upadacitinib
+    indications: [rheumatoid arthritis, psoriatic arthritis, atopic dermatitis, ulcerative colitis, Crohn's disease, ankylosing spondylitis, non-radiographic axial spondyloarthritis, giant cell arteritis]
+    key_dosing: "15 mg orally once daily (RA, PsA, AS); 45 mg once daily induction then 15-30 mg maintenance (UC, Crohn's)"
+    boxed_warnings: [serious infections, mortality, malignancy, major adverse cardiovascular events, thrombosis]
+  Humira:
+    generic: adalimumab
+    indications: [rheumatoid arthritis, psoriatic arthritis, ankylosing spondylitis, Crohn's disease, ulcerative colitis, plaque psoriasis, hidradenitis suppurativa, uveitis, juvenile idiopathic arthritis]
+    key_dosing: "40 mg subcutaneously every other week (RA)"
+    boxed_warnings: [serious infections, malignancy]
+  Vraylar:
+    generic: cariprazine
+    indications: [bipolar I depression, bipolar I manic or mixed episodes, schizophrenia, adjunctive treatment of major depressive disorder]
+    key_dosing: "1.5 mg orally once daily start, titrate to 1.5-3 mg (bipolar depression); up to 6 mg (mania/schizophrenia)"
+    boxed_warnings: [increased mortality in elderly patients with dementia-related psychosis, suicidal thoughts and behaviors in young adults]
+  Ubrelvy:
+    generic: ubrogepant
+    indications: [acute treatment of migraine with or without aura]
+    key_dosing: "50 mg or 100 mg orally as needed; may repeat after 2 hours (max 200 mg/24h)"
+    boxed_warnings: []
+  Qulipta:
+    generic: atogepant
+    indications: [preventive treatment of episodic and chronic migraine]
+    key_dosing: "10 mg, 30 mg, or 60 mg orally once daily"
+    boxed_warnings: []

@@ -1,0 +1,24 @@
+settings:
+  db_path: /app/data/ema_demo.sqlite
+  schedule_cron: "0 2 * * *"      # daily 02:00 UTC (FR-502)
+  max_retries: 3                  # FR-206
+  samples_per_question: 3         # FR-212 consensus: triples per-run cost
+  backoff_seconds: [2, 4, 8]      # FR-206
+  max_tokens_per_run: null        # NF-015; null = no budget cap
+  orchestrator_model: claude-opus-4-8
+  scoring_model: claude-opus-4-8
+  anthropic_api_key_env: ANTHROPIC_API_KEY
+  system_prompts:
+    default: "You are a helpful assistant answering a user's health-related question. Answer factually and concisely."
+    Patient: "You are a knowledgeable health assistant answering a patient who is asking about their treatment options. Use plain, supportive language."
+    Provider: "You are a clinical decision-support assistant answering a healthcare provider's question. Use precise clinical language and cite treatment guidelines where relevant."
+    Prospect: "You are a health information assistant answering a prospective patient researching treatment options. Be balanced and informative."
+
+brands:                            # SE-007: content lives in config, not code
+  abbvie_brands: [Skyrizi, Rinvoq, Humira, Vraylar, Ubrelvy, Qulipta, Imbruvica, Venclexta]
+  competitor_brands: [Stelara, Cosentyx, Taltz, Tremfya, Xeljanz, Olumiant, Enbrel, Dupixent, Latuda, Rexulti, Abilify, Seroquel, lithium, Nurtec, Aimovig, topiramate, Calquence]
+
+drift:
+  embedding_model: text-embedding-3-small
+  embedding_api_key_env: OPENAI_API_KEY
+  cosine_threshold: 0.85
