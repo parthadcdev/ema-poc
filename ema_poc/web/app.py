@@ -5,13 +5,14 @@ from __future__ import annotations
 
 import json
 import secrets as _secrets
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
@@ -21,6 +22,20 @@ from ema_poc.db import connect, init_schema
 from ema_poc.playground.service import run_playground
 
 _STATIC = Path(__file__).parent / "static"
+
+
+def _check_rate(store: dict, ip: str, cap: int, now: float, window: float = 3600.0) -> bool:
+    """Return True if allowed (and record the hit); False if over cap.
+    cap <= 0 means unlimited. store maps ip -> list[timestamps]."""
+    if cap <= 0:
+        return True
+    hits = [t for t in store.get(ip, []) if now - t < window]
+    if len(hits) >= cap:
+        store[ip] = hits
+        return False
+    hits.append(now)
+    store[ip] = hits
+    return True
 
 
 @dataclass
@@ -53,6 +68,7 @@ def create_app(deps: WebDeps) -> FastAPI:
             )
 
     app = FastAPI(title="EMA Playground", dependencies=[Depends(_auth_dep)])
+    app.state.rate_store = {}
 
     @app.get("/")
     def index():
@@ -83,6 +99,7 @@ def create_app(deps: WebDeps) -> FastAPI:
 
     @app.get("/api/ask/stream")
     def ask_stream(
+        request: Request,
         question: str = Query(...),
         persona: str | None = Query(None),
         brand_focus: str | None = Query(None),
@@ -90,6 +107,11 @@ def create_app(deps: WebDeps) -> FastAPI:
     ):
         if not question or not question.strip():
             raise HTTPException(status_code=400, detail="question is required")
+
+        cap = int((deps.env or {}).get("PLAYGROUND_MAX_QUERIES_PER_HOUR", "60") or "60")
+        ip = request.client.host if request.client else "unknown"
+        if not _check_rate(app.state.rate_store, ip, cap, time.time()):
+            raise HTTPException(status_code=429, detail="Query limit reached — try again later.")
 
         selected = [t.strip() for t in selected_targets.split(",")] if selected_targets else None
         cfg = deps.config
