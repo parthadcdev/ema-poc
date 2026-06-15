@@ -1,5 +1,5 @@
-"""OpenAI (GPT-4o) adapter. Ungrounded: Chat Completions (IN-1). Grounded:
-Responses API with the web_search tool, returning url_citation annotations."""
+"""OpenAI adapter. Ungrounded: Chat Completions. Grounded: Responses API web_search.
+Params are config-driven (temperature optional; max_completion_tokens for reasoning models)."""
 
 from __future__ import annotations
 

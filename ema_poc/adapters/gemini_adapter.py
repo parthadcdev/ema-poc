@@ -69,7 +69,8 @@ class GeminiAdapter(LLMAdapter):
         pf = getattr(resp, "prompt_feedback", None)
         block = getattr(pf, "block_reason", None) if pf else None
 
-        blocked = finish == "SAFETY" or bool(block)
+        block_name = getattr(block, "name", None) or (str(block) if block is not None else None)
+        blocked = finish == "SAFETY" or (block_name is not None and block_name != "BLOCKED_REASON_UNSPECIFIED")
 
         usage = getattr(resp, "usage_metadata", None)
         ptok = getattr(usage, "prompt_token_count", None)

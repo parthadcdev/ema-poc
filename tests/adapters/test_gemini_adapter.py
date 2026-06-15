@@ -100,6 +100,23 @@ def test_prompt_feedback_block_reason_blocks():
     assert out.status == "BLOCKED"
 
 
+def test_prompt_feedback_block_reason_named_blocks():
+    """A block_reason with a real .name (e.g. SAFETY) must still block."""
+    pf = SimpleNamespace(block_reason=SimpleNamespace(name="SAFETY"))
+    client = _FakeClient(_resp(text="", prompt_feedback=pf))
+    out = _adapter(client).query("s", "q")
+    assert out.status == "BLOCKED"
+
+
+def test_blocked_reason_unspecified_is_not_blocked():
+    """BLOCKED_REASON_UNSPECIFIED must NOT be treated as a real block."""
+    pf = SimpleNamespace(block_reason=SimpleNamespace(name="BLOCKED_REASON_UNSPECIFIED"))
+    client = _FakeClient(_resp(text="answer", finish="STOP", prompt_feedback=pf))
+    out = _adapter(client).query("s", "q")
+    assert out.status == "SUCCESS"
+    assert out.text == "answer"
+
+
 # ---------------------------------------------------------------------------
 # Grounded path
 # ---------------------------------------------------------------------------
