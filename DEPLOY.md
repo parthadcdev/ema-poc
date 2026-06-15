@@ -111,6 +111,8 @@ fly secrets set PLAYGROUND_MAX_QUERIES_PER_HOUR=30
 ```
 Auth limits spend to whoever holds the password, and the per-IP hourly cap (PLAYGROUND_MAX_QUERIES_PER_HOUR) bounds runaway usage.
 
+`PLAYGROUND_MAX_CONCURRENT_JOBS` (default 2) bounds how many background questions run at once.
+
 ### Compliance
 - Third-party host with AbbVie **DEMO data only** — no PII/PHI, not production secrets (SE-004).
 - The demo data resets to the baked snapshot on each redeploy (no persistent volume by default).
