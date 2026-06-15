@@ -134,12 +134,13 @@ body{
   font-family:var(--sans); font-size:11px; font-weight:600; letter-spacing:.05em;
   text-transform:uppercase; color:var(--ink-faint);
 }
-.filter-bar select,.filter-bar input[type=date]{
+.filter-bar select,.filter-bar input[type=date],.filter-bar input[type=search]{
   font-family:var(--sans); font-size:13px; color:var(--ink);
   padding:.35rem .55rem; border:1px solid var(--rule); border-radius:var(--radius);
   background:var(--surface); min-width:116px;
   transition:border-color .15s,box-shadow .15s;
 }
+.filter-bar input[type=search]{min-width:200px}
 .filter-bar select:focus,.filter-bar input:focus{
   outline:none; border-color:var(--accent);
   box-shadow:0 0 0 3px rgba(7,29,73,.12);
@@ -153,6 +154,7 @@ body{
 }
 #f-reset:hover{border-color:var(--accent-deep);color:var(--accent-deep);background:rgba(7,29,73,.06)}
 #f-reset:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.filter-count{font-family:var(--sans);font-size:12px;color:var(--ink-faint);align-self:flex-end;padding-bottom:.45rem}
 
 /* ---- Content area ---- */
 .content{padding:1.75rem; flex:1}
@@ -500,6 +502,12 @@ populate('f-persona', distinct('persona'));
 const STATE = { section: 'overview', filters: {} };
 
 /* ---- Filter engine ---- */
+function _searchable(r){
+  return [r.question_text, r.response_text, r.scoring_rationale, r.brand_focus,
+          r.llm_name, r.persona, r.therapeutic_area, r.domain,
+          r.competitive_position, r.status,
+          (r.brand_mentions || []).join(' ')].join(' ').toLowerCase();
+}
 function applyFilters(){
   const ta      = document.getElementById('f-ta').value;
   const brand   = document.getElementById('f-brand').value;
@@ -508,6 +516,7 @@ function applyFilters(){
   const source  = document.getElementById('f-source').value;
   const from    = document.getElementById('f-from').value;
   const to      = document.getElementById('f-to').value;
+  const terms   = document.getElementById('f-search').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
   return DATA.records.filter(function(r){
     if(ta      && r.therapeutic_area !== ta)    return false;
     if(brand   && r.brand_focus      !== brand) return false;
@@ -516,6 +525,10 @@ function applyFilters(){
     if(source && r.source !== source)           return false;
     if(from    && r.date < from)                return false;
     if(to      && r.date > to)                  return false;
+    if(terms.length){
+      var hay = _searchable(r);
+      for(var i=0;i<terms.length;i++){ if(hay.indexOf(terms[i]) < 0) return false; }
+    }
     return true;
   });
 }
@@ -534,10 +547,11 @@ document.querySelectorAll('.sidenav a[data-section]').forEach(function(link){
 });
 
 /* ---- Filter events ---- */
-document.querySelectorAll('#f-ta,#f-brand,#f-llm,#f-persona,#f-source,#f-from,#f-to').forEach(function(el){
+document.querySelectorAll('#f-ta,#f-brand,#f-llm,#f-persona,#f-source,#f-from,#f-to,#f-search').forEach(function(el){
   el.addEventListener('change', render);
   el.addEventListener('input', render);
 });
+document.getElementById('f-search').addEventListener('search', render);
 document.getElementById('f-reset').addEventListener('click', function(){
   document.getElementById('f-ta').value      = '';
   document.getElementById('f-brand').value   = '';
@@ -546,6 +560,7 @@ document.getElementById('f-reset').addEventListener('click', function(){
   document.getElementById('f-source').value  = '';
   document.getElementById('f-from').value    = '';
   document.getElementById('f-to').value      = '';
+  document.getElementById('f-search').value  = '';
   render();
 });
 
@@ -1140,6 +1155,7 @@ function renderResponses(rows){
    ==================================================================== */
 function render(){
   var rows = applyFilters();
+  document.getElementById('f-count').textContent = 'Showing ' + rows.length + ' of ' + DATA.records.length;
   showSection(STATE.section);
   switch(STATE.section){
     case 'overview':   renderOverview(rows);   break;
@@ -1185,6 +1201,7 @@ def render_dashboard_html(dataset: dict, *, playground_url: str | None = None) -
 
     filter_bar = (
         "<div class='filter-bar'>"
+        "<label>Search<input type='search' id='f-search' placeholder='Search all text…'></label>"
         "<label>Therapeutic Area<select id='f-ta'><option value=''>All</option></select></label>"
         "<label>Brand<select id='f-brand'><option value=''>All</option></select></label>"
         "<label>LLM<select id='f-llm'><option value=''>All</option></select></label>"
@@ -1195,6 +1212,7 @@ def render_dashboard_html(dataset: dict, *, playground_url: str | None = None) -
         "<label>From<input type='date' id='f-from'></label>"
         "<label>To<input type='date' id='f-to'></label>"
         "<button id='f-reset'>Reset</button>"
+        "<span id='f-count' class='filter-count'></span>"
         "</div>"
     )
 
