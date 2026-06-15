@@ -67,8 +67,8 @@ def test_index_contains_playground_markers(tmp_path):
     client = TestClient(app)
     html = client.get("/").text
     assert 'id="question"' in html
-    assert "EventSource" in html
-    assert "/api/ask/stream" in html
+    assert "/api/ask" in html
+    assert "/api/queries" in html
     assert "/api/targets" in html
 
 
@@ -183,27 +183,27 @@ def test_auth_protects_all_routes(tmp_path):
     # /dashboard with correct creds → 200
     assert client.get("/dashboard", auth=("abbvie", "secret")).status_code == 200
 
-    # /api/ask/stream without creds → 401
-    assert client.get("/api/ask/stream", params={"question": "hi"}).status_code == 401
+    # /api/ask without creds → 401
+    assert client.post("/api/ask", json={"question": "hi"}).status_code == 401
 
-    # /api/ask/stream with correct creds → not 401 (may be 200/stream or 400)
-    assert client.get("/api/ask/stream", params={"question": "hi"}, auth=("abbvie", "secret")).status_code != 401
+    # /api/ask with correct creds → not 401 (202)
+    assert client.post("/api/ask", json={"question": "hi"}, auth=("abbvie", "secret")).status_code != 401
 
 
-def test_auth_protects_stream_route(tmp_path):
+def test_auth_protects_ask_route(tmp_path):
     from fastapi.testclient import TestClient
     env = {"APP_PASSWORD": "pw", "APP_USER": "abbvie"}
     app = create_app(_deps_auth(tmp_path, env))
     client = TestClient(app, raise_server_exceptions=False)
 
     # No credentials → 401
-    assert client.get("/api/ask/stream", params={"question": "hi"}).status_code == 401
+    assert client.post("/api/ask", json={"question": "hi"}).status_code == 401
 
     # Wrong password → 401
-    assert client.get("/api/ask/stream", params={"question": "hi"}, auth=("abbvie", "wrong")).status_code == 401
+    assert client.post("/api/ask", json={"question": "hi"}, auth=("abbvie", "wrong")).status_code == 401
 
-    # Correct credentials → auth passes (response may be 200/stream or 400, not 401)
-    assert client.get("/api/ask/stream", params={"question": "hi"}, auth=("abbvie", "pw")).status_code != 401
+    # Correct credentials → auth passes (202, not 401)
+    assert client.post("/api/ask", json={"question": "hi"}, auth=("abbvie", "pw")).status_code != 401
 
 
 def test_auth_disabled_when_no_password(tmp_path):

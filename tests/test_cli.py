@@ -135,7 +135,7 @@ def test_serve_builds_app_and_binds_localhost(tmp_path):
         recorded["host"] = host
         recorded["port"] = port
         recorded["has_stream_route"] = any(
-            getattr(r, "path", None) == "/api/ask/stream" for r in app.routes
+            getattr(r, "path", None) == "/api/ask" for r in app.routes
         )
 
     target = LLMTargetConfig(

@@ -20,16 +20,18 @@ def _system_prompt_for(system_prompts, persona) -> str:
 def run_playground(
     conn, *, adapters, scoring_client, scorer, abbvie_brands, competitor_brands,
     system_prompts, question_text, persona, brand_focus, model,
-    id_factory, now, max_retries, backoff,
+    id_factory, now, max_retries, backoff, query_id=None,
 ):
     if not adapters:
         yield {"event": "error", "message": "No targets selected."}
         return
 
-    query_id = S.create_query(
-        conn, question_text=question_text, persona=persona, brand_focus=brand_focus,
-        now=now, id_factory=id_factory,
-    )
+    if query_id is None:
+        query_id = S.create_query(
+            conn, question_text=question_text, persona=persona, brand_focus=brand_focus,
+            now=now, id_factory=id_factory, status="RUNNING",
+            target_count=len(adapters), started_at=now,
+        )
     yield {"event": "query", "query_id": query_id}
 
     system_prompt = _system_prompt_for(system_prompts, persona)

@@ -501,6 +501,99 @@ button#run:disabled {
   gap: .3rem;
   margin: .4rem 0;
 }
+
+/* ---- Workspace: results + Recent questions side column ---- */
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 1.5rem;
+  align-items: start;
+}
+@media (max-width: 820px) {
+  .workspace { grid-template-columns: 1fr; }
+}
+
+/* ---- Recent questions panel ---- */
+.recent-panel {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.1rem 1.2rem;
+  box-shadow: var(--shadow-card);
+  position: sticky;
+  top: 4.5rem;
+}
+.recent-title {
+  margin: 0 0 .7rem;
+  font-family: var(--mono);
+  font-size: .7rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 600;
+}
+#recent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.recent-empty {
+  font-size: .85rem;
+  color: var(--ink-faint);
+  line-height: 1.5;
+}
+.recent-item {
+  font-size: .85rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  padding: .55rem .15rem;
+  border-top: 1px solid var(--rule-soft);
+  cursor: pointer;
+  transition: color .12s;
+}
+.recent-item:first-child { border-top: 0; }
+.recent-item:hover { color: var(--accent-deep); }
+.recent-item.active { color: var(--ink); font-weight: 500; }
+.recent-item:focus-visible {
+  outline: 2px solid var(--accent-deep);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+/* ---- Status chips for Recent questions ---- */
+.chip-status {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: .62rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: .08rem .42rem;
+  margin-right: .4rem;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  vertical-align: middle;
+  /* Default/fallback so an unexpected status string still shows a visible chip */
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  border-color: var(--rule);
+}
+.chip-running {
+  background: var(--neu-soft);
+  color: var(--neu);
+  border-color: #E6D29A;
+}
+.chip-done {
+  background: var(--pos-soft);
+  color: #14593A;
+  border-color: #A8D9BA;
+}
+.chip-failed {
+  background: var(--neg-soft);
+  color: var(--neg);
+  border-color: #F4A8B5;
+}
 </style>
 </head>
 <body>
@@ -536,7 +629,13 @@ button#run:disabled {
     <div class="note">Sandbox mode &mdash; results are stored separately from the approval-gated monitoring data and never feed the official dashboard. Do not enter PII/PHI (SE-001).</div>
   </div>
   <div id="banner"></div>
-  <div class="grid" id="results"></div>
+  <div class="workspace">
+    <div class="grid" id="results"></div>
+    <aside class="recent-panel">
+      <h3 class="recent-title">Recent questions</h3>
+      <ul id="recent-list"></ul>
+    </aside>
+  </div>
 </main>
 <script>
 const POSCOLOR = {
@@ -620,57 +719,180 @@ function ensureCard(name, grounded) {
   return el;
 }
 
-function run() {
+/* Render one answer card from a response object (shape from
+   GET /api/queries/{id}: llm_name, grounded, status, answer_text, tokens,
+   sentiment_score, competitive_position, scoring_rationale, citations). */
+function renderAnswerCard(ev) {
+  const groundedByName = Object.fromEntries(targetsData.map(t => [t.name, t.grounded]));
+  const grounded = ev.grounded != null ? ev.grounded : groundedByName[ev.llm_name];
+  const card = ensureCard(ev.llm_name, grounded);
+
+  card.querySelector(".answer").innerHTML = '<div class="md">' +
+    renderMarkdown(ev.answer_text || ("(no answer — " + esc(ev.status) + ")")) + '</div>';
+
+  if (ev.competitive_position != null || ev.sentiment_score != null) {
+    const color = POSCOLOR[ev.competitive_position] || "#eee";
+    let html = "";
+    if (ev.competitive_position != null) {
+      html += `<span class="chip" style="background:${color}">${esc(ev.competitive_position)}</span>`;
+    }
+    if (ev.sentiment_score != null) {
+      html += `<span class="chip" style="background:#f0f0f0">sentiment ${esc(ev.sentiment_score)}</span>`;
+    }
+    card.querySelector(".score").innerHTML = html;
+  }
+
+  if (ev.citations && ev.citations.length) {
+    card.querySelector(".citations").innerHTML = "<strong>Sources:</strong><ul>" +
+      ev.citations.map(c =>
+        `<li><a href="${esc(safeUrl(c.url))}" target="_blank" rel="noopener noreferrer">${esc(c.title || c.url)}</a></li>`
+      ).join("") + "</ul>";
+  }
+}
+
+/* Render the full set of answer cards for a query's responses. */
+function renderAnswers(responses) {
+  document.getElementById("results").innerHTML = "";
+  (responses || []).forEach(renderAnswerCard);
+}
+
+let pollTimer = null;
+let activeQueryId = null;
+
+async function refreshRecent() {
+  let res;
+  try { res = await fetch("/api/queries"); } catch (e) { return; }
+  if (!res.ok) return;
+  const { queries } = await res.json();
+  const ul = document.getElementById("recent-list");
+  ul.innerHTML = "";
+  if (!queries || !queries.length) {
+    ul.innerHTML = '<li class="recent-empty">No questions yet. Ask one above to get started.</li>';
+    return;
+  }
+  for (const q of queries) {
+    const li = document.createElement("li");
+    li.className = "recent-item" + (q.query_id === activeQueryId ? " active" : "");
+    li.tabIndex = 0;
+    const status = String(q.status || "");
+    const chip = `<span class="chip-status chip-${status.toLowerCase()}">` +
+                 `${esc(status)} ${q.done_count}/${q.total_count}</span>`;
+    li.innerHTML = chip + esc(q.question_text);
+    li.onclick = () => openQuery(q.query_id);
+    li.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openQuery(q.query_id); } };
+    ul.appendChild(li);
+  }
+}
+
+async function openQuery(queryId) {
+  // Source of truth for "which query owns the UI". Set this FIRST so that any
+  // older in-flight openQuery loop can detect it has been superseded.
+  activeQueryId = queryId;
+  const runBtn = document.getElementById("run");
+  const banner = document.getElementById("banner");
+  const status = document.getElementById("status");
+
+  let res;
+  try {
+    res = await fetch("/api/queries/" + encodeURIComponent(queryId));
+  } catch (e) {
+    // Network error: only surface it if we're still the active query.
+    if (queryId !== activeQueryId) return;
+    banner.innerHTML = '<div class="err">Couldn\'t load results — try again.</div>';
+    runBtn.disabled = false;
+    status.textContent = "";
+    return;
+  }
+  // A newer openQuery/submit took over while we awaited the fetch — bail
+  // silently (the active loop owns the timer/button/results now).
+  if (queryId !== activeQueryId) return;
+  if (!res.ok) {
+    banner.innerHTML = '<div class="err">Couldn\'t load results — try again.</div>';
+    runBtn.disabled = false;
+    status.textContent = "";
+    return;
+  }
+
+  const data = await res.json();
+  // Re-check after the second await: a newer query may have taken over.
+  if (queryId !== activeQueryId) return;
+
+  renderAnswers(data.responses);
+  if (data.query.status === "RUNNING") {
+    status.textContent = "Running…";
+    // Lock Run while a query is being polled so the user can't compound the race.
+    runBtn.disabled = true;
+    clearTimeout(pollTimer);
+    pollTimer = setTimeout(() => openQuery(queryId), 2000);
+  } else {
+    clearTimeout(pollTimer);
+    runBtn.disabled = false;
+    if (data.query.status === "FAILED") {
+      status.textContent = "Failed.";
+      banner.innerHTML = `<div class="err">${esc(data.query.error_text || "Query failed.")}</div>`;
+    } else {
+      status.textContent = "Done.";
+    }
+    refreshRecent();
+  }
+}
+
+async function submitQuestion() {
   const q = document.getElementById("question").value.trim();
   const banner = document.getElementById("banner");
   banner.innerHTML = "";
   if (!q) { banner.innerHTML = '<div class="err">Please enter a question.</div>'; return; }
-  document.getElementById("results").innerHTML = "";
   const persona = document.getElementById("persona").value;
   const brand = document.getElementById("brand").value.trim();
   const chosen = Array.from(document.querySelectorAll(".tgt:checked")).map(c => c.value);
-  if (!chosen.length) { banner.innerHTML = '<div class="err">Select at least one target.</div>'; return; }
 
-  const params = new URLSearchParams({ question: q, targets: chosen.join(",") });
-  if (persona) params.set("persona", persona);
-  if (brand) params.set("brand_focus", brand);
+  const body = {
+    question: q,
+    persona: persona || null,
+    brand_focus: brand || null,
+    targets: chosen.length ? chosen : null,
+  };
 
   const runBtn = document.getElementById("run");
   const status = document.getElementById("status");
-  runBtn.disabled = true; status.textContent = "Running…";
+  runBtn.disabled = true; status.textContent = "Submitting…";
 
-  const es = new EventSource("/api/ask/stream?" + params.toString());
-  const groundedByName = Object.fromEntries(targetsData.map(t => [t.name, t.grounded]));
-
-  es.onmessage = (e) => {
-    const ev = JSON.parse(e.data);
-    if (ev.event === "answer") {
-      const card = ensureCard(ev.llm_name, ev.grounded || groundedByName[ev.llm_name]);
-      card.querySelector(".answer").innerHTML = '<div class="md">' +
-        renderMarkdown(ev.answer_text || ("(no answer — " + esc(ev.status) + ")")) + '</div>';
-      if (ev.citations && ev.citations.length) {
-        card.querySelector(".citations").innerHTML = "<strong>Sources:</strong><ul>" +
-          ev.citations.map(c =>
-            `<li><a href="${esc(safeUrl(c.url))}" target="_blank" rel="noopener noreferrer">${esc(c.title || c.url)}</a></li>`
-          ).join("") + "</ul>";
-      }
-    } else if (ev.event === "score") {
-      const card = ensureCard(ev.llm_name, groundedByName[ev.llm_name]);
-      const color = POSCOLOR[ev.competitive_position] || "#eee";
-      card.querySelector(".score").innerHTML =
-        `<span class="chip" style="background:${color}">${esc(ev.competitive_position)}</span>` +
-        `<span class="chip" style="background:#f0f0f0">sentiment ${esc(ev.sentiment_score)}</span>`;
-    } else if (ev.event === "error") {
-      banner.innerHTML = `<div class="err">${esc(ev.message || "Error")}</div>`;
-    } else if (ev.event === "done") {
-      es.close(); runBtn.disabled = false; status.textContent = "Done.";
-    }
-  };
-  es.onerror = () => { es.close(); runBtn.disabled = false; status.textContent = "Connection closed."; };
+  let res;
+  try {
+    res = await fetch("/api/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    runBtn.disabled = false; status.textContent = "";
+    banner.innerHTML = '<div class="err">Network error — please try again.</div>';
+    return;
+  }
+  if (res.status === 400) {
+    runBtn.disabled = false; status.textContent = "";
+    banner.innerHTML = '<div class="err">Please enter a question.</div>';
+    return;
+  }
+  if (res.status === 429) {
+    runBtn.disabled = false; status.textContent = "";
+    banner.innerHTML = '<div class="err">Query limit reached. Please try again later.</div>';
+    return;
+  }
+  if (!res.ok) {
+    runBtn.disabled = false; status.textContent = "";
+    banner.innerHTML = '<div class="err">Could not submit question.</div>';
+    return;
+  }
+  const { query_id } = await res.json();
+  refreshRecent();
+  openQuery(query_id);
 }
 
-document.getElementById("run").addEventListener("click", run);
+document.getElementById("run").addEventListener("click", submitQuestion);
 loadTargets();
+// Script runs at the end of <body>, so the DOM is ready — load immediately.
+refreshRecent();
 </script>
 </body>
 </html>
