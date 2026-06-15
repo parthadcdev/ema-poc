@@ -4,14 +4,16 @@ app is testable with fakes and no network."""
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import secrets as _secrets
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from ema_poc.dashboard.dataset import collect_dataset
 from ema_poc.dashboard.render import render_dashboard_html
@@ -28,10 +30,29 @@ class WebDeps:
     scoring_client: object         # Anthropic client (or fake)
     scorer: Callable               # score_response-compatible callable
     db_path: str
+    env: object = None             # Mapping of env vars; None means auth disabled
 
 
 def create_app(deps: WebDeps) -> FastAPI:
-    app = FastAPI(title="EMA Playground")
+    _security = HTTPBasic(auto_error=False)
+
+    def _auth_dep(credentials: HTTPBasicCredentials | None = Depends(_security)):
+        env = deps.env or {}
+        password = env.get("APP_PASSWORD") or ""
+        if not password:
+            return  # auth disabled when no password configured
+        user = env.get("APP_USER") or "abbvie"
+        ok = (credentials is not None
+              and _secrets.compare_digest(credentials.username, user)
+              and _secrets.compare_digest(credentials.password, password))
+        if not ok:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unauthorized",
+                headers={"WWW-Authenticate": 'Basic realm="EMA"'},
+            )
+
+    app = FastAPI(title="EMA Playground", dependencies=[Depends(_auth_dep)])
 
     @app.get("/")
     def index():

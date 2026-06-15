@@ -115,3 +115,72 @@ def test_index_has_dashboard_link(tmp_path):
     from fastapi.testclient import TestClient
     body = TestClient(create_app(_deps(tmp_path))).get("/").text
     assert 'href="/dashboard"' in body
+
+
+# ---------------------------------------------------------------------------
+# HTTP Basic Auth tests
+# ---------------------------------------------------------------------------
+
+def _deps_auth(tmp_path, env):
+    """Like _deps but with an env mapping for auth configuration."""
+    return WebDeps(
+        config=_config(),
+        build_adapters_for=lambda names: [],
+        scoring_client=object(),
+        scorer=lambda *a, **k: None,
+        db_path=str(tmp_path / "w.sqlite"),
+        env=env,
+    )
+
+
+def test_auth_required_when_password_set(tmp_path):
+    from fastapi.testclient import TestClient
+    env = {"APP_PASSWORD": "pw", "APP_USER": "abbvie"}
+    app = create_app(_deps_auth(tmp_path, env))
+    client = TestClient(app, raise_server_exceptions=False)
+
+    # No credentials → 401
+    r = client.get("/")
+    assert r.status_code == 401
+    assert r.headers.get("www-authenticate") == 'Basic realm="EMA"'
+
+    # Wrong password → 401
+    r = client.get("/", auth=("abbvie", "wrong"))
+    assert r.status_code == 401
+
+    # Correct credentials → 200
+    r = client.get("/", auth=("abbvie", "pw"))
+    assert r.status_code == 200
+
+
+def test_auth_protects_all_routes(tmp_path):
+    from fastapi.testclient import TestClient
+    env = {"APP_PASSWORD": "secret", "APP_USER": "abbvie"}
+    app = create_app(_deps_auth(tmp_path, env))
+    client = TestClient(app, raise_server_exceptions=False)
+
+    # /api/targets without creds → 401
+    assert client.get("/api/targets").status_code == 401
+
+    # /dashboard without creds → 401
+    assert client.get("/dashboard").status_code == 401
+
+    # /api/targets with correct creds → 200
+    assert client.get("/api/targets", auth=("abbvie", "secret")).status_code == 200
+
+    # /dashboard with correct creds → 200
+    assert client.get("/dashboard", auth=("abbvie", "secret")).status_code == 200
+
+
+def test_auth_disabled_when_no_password(tmp_path):
+    from fastapi.testclient import TestClient
+
+    # Empty env dict → auth disabled
+    app = create_app(_deps_auth(tmp_path, {}))
+    client = TestClient(app)
+    assert client.get("/").status_code == 200
+
+    # env=None → auth disabled (existing tests path)
+    app2 = create_app(_deps_auth(tmp_path, None))
+    client2 = TestClient(app2)
+    assert client2.get("/").status_code == 200

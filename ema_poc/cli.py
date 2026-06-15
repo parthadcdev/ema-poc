@@ -270,6 +270,7 @@ def main(argv=None, deps: Deps | None = None) -> int:
             scoring_client=deps.make_scoring_client(deps.env),
             scorer=score_response,
             db_path=config.settings.db_path,
+            env=deps.env,
         )
         app = create_app(web_deps)
         deps.out(f"Playground on http://{args.host}:{args.port} (Ctrl-C to stop)")
