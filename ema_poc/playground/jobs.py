@@ -60,9 +60,26 @@ class JobManager:
                 max_retries=cfg.settings.max_retries, backoff=cfg.settings.backoff_seconds)
             for _ in gen:
                 pass
-            S.mark_query_done(conn, query_id, finished_at=self.now_factory())
         except Exception as exc:  # whole-job failure
-            S.mark_query_failed(conn, query_id, finished_at=self.now_factory(),
-                                error_text=str(exc))
+            self._finalize(conn, query_id, ok=False, error_text=str(exc))
+        else:
+            self._finalize(conn, query_id, ok=True)
         finally:
             conn.close()
+
+    def _finalize(self, conn, query_id, *, ok, error_text=None):
+        # Best-effort: a failure to record the terminal state must not strand the row.
+        # sweep_stale_running() recovers any RUNNING rows on the next restart.
+        try:
+            if ok:
+                S.mark_query_done(conn, query_id, finished_at=self.now_factory())
+            else:
+                S.mark_query_failed(conn, query_id, finished_at=self.now_factory(),
+                                    error_text=error_text)
+        except Exception:
+            pass
+
+    def shutdown(self, wait: bool = True) -> None:
+        pool = getattr(self, "_pool", None)
+        if pool is not None:
+            pool.shutdown(wait=wait)

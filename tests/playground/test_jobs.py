@@ -20,8 +20,9 @@ class FakeScore:
 
 
 def _cfg():
-    return AppConfig(settings=Settings(system_prompts={"default": "x"}),
-                     brands=BrandConfig(), targets=[])
+    return AppConfig(
+        settings=Settings(system_prompts={"default": "x"}, max_retries=0, backoff_seconds=[0]),
+        brands=BrandConfig(), targets=[])
 
 
 _INLINE = lambda fn, *a: fn(*a)   # run the job synchronously in tests
@@ -43,6 +44,7 @@ def test_submit_runs_to_done_and_persists(tmp_path):
     assert S.get_query(c, qid).status == "DONE"
     assert S.get_query(c, qid).target_count == 1
     assert len(S.list_query_responses(c, qid)) == 1
+    c.close()
 
 
 def test_adapter_error_still_completes_job(tmp_path):
@@ -52,6 +54,7 @@ def test_adapter_error_still_completes_job(tmp_path):
     qid = mgr.submit(question="q", persona=None, brand_focus=None, selected_targets=None)
     c = connect(str(tmp_path / "j.sqlite")); init_schema(c)
     assert S.get_query(c, qid).status == "DONE"
+    c.close()
 
 
 def test_job_marked_failed_when_runner_raises(tmp_path, monkeypatch):
@@ -65,3 +68,4 @@ def test_job_marked_failed_when_runner_raises(tmp_path, monkeypatch):
     c = connect(str(tmp_path / "j.sqlite")); init_schema(c)
     q = S.get_query(c, qid)
     assert q.status == "FAILED" and "kaboom" in (q.error_text or "")
+    c.close()
