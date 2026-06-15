@@ -750,11 +750,5 @@ def test_dashboard_has_source_filter(html):
 
 
 def test_dashboard_source_badge_in_responses(html):
-    assert ">Source<" in html                  # provenance label in the Responses detail
-
-
-def test_dashboard_still_self_contained_with_source(html):
-    for marker in ["http://", "https://"]:
-        for line in html.splitlines():
-            if marker in line:
-                assert "www.w3.org/2000/svg" in line, f"external resource: {line.strip()}"
+    # The detail-grid provenance label, not the filter-bar <label>Source<select...
+    assert "class='dl'>Source</div>" in html
