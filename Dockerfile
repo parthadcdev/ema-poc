@@ -16,4 +16,6 @@ COPY pyproject.toml ema_demo.sqlit[e] /app/data/
 RUN rm -f /app/data/pyproject.toml
 ENV PORT=8080 PLAYGROUND_MAX_QUERIES_PER_HOUR=60
 EXPOSE 8080
-CMD ["ema", "serve", "--config-dir", "config_deploy", "--host", "0.0.0.0", "--port", "8080"]
+# --config-dir is a global flag (defined on the top-level parser), so it must come
+# BEFORE the `serve` subcommand or argparse rejects it as "unrecognized arguments".
+CMD ["ema", "--config-dir", "config_deploy", "serve", "--host", "0.0.0.0", "--port", "8080"]
