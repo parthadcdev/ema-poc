@@ -24,6 +24,17 @@ def test_job_columns_added_to_preexisting_db(tmp_path):
     assert "status" in cols and "error_text" in cols
 
 
-def test_connect_sets_busy_timeout(tmp_path):
-    conn = connect(str(tmp_path / "t.sqlite"))
+def test_connect_sets_busy_timeout(tmp_path, monkeypatch):
+    import sqlite3
+    from ema_poc import db as dbmod
+
+    real_connect = sqlite3.connect
+
+    def patched(*args, **kwargs):
+        c = real_connect(*args, **kwargs)
+        c.execute("PRAGMA busy_timeout = 0")  # force a non-5000 starting value
+        return c
+
+    monkeypatch.setattr(dbmod.sqlite3, "connect", patched)
+    conn = dbmod.connect(str(tmp_path / "t.sqlite"))
     assert conn.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
