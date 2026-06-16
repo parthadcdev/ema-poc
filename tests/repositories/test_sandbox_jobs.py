@@ -160,3 +160,17 @@ def test_list_unscored_sandbox_returns_only_rescore_candidates(tmp_path):
                     finish_reason="error", status="FAILED", now="t1")
     ids = [r["sandbox_response_id"] for r in S.list_unscored_sandbox(c)]
     assert ids == [cand]
+
+
+def test_get_sandbox_response_roundtrip(tmp_path):
+    c = _conn(tmp_path)
+    qid = S.create_query(c, question_text="q", persona=None, brand_focus="Skyrizi",
+                         now="t0", status="DONE", target_count=1, started_at="t0")
+    rid = S.save_response(c, query_id=qid, llm_name="A", llm_model_version="v",
+                          grounded=False, answer_text="ans", response_tokens=1,
+                          finish_reason="stop", status="SUCCESS", now="t1")
+    S.set_response_scoring_error(c, sandbox_response_id=rid, error="boom")
+    got = S.get_sandbox_response(c, rid)
+    assert got is not None and got.sandbox_response_id == rid
+    assert got.scoring_error == "boom" and got.answer_text == "ans"
+    assert S.get_sandbox_response(c, "missing") is None
