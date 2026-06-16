@@ -141,7 +141,7 @@ def set_response_scoring_error(conn, sandbox_response_id, *, error, commit: bool
         conn.commit()
 
 
-def list_unscored_sandbox(conn):
+def list_unscored_sandbox(conn) -> list[sqlite3.Row]:
     """Rescore candidates: SUCCESS responses with no score yet and non-empty text,
     with their query's brand_focus. Returns sqlite Rows."""
     return conn.execute(
