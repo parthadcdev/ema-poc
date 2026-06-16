@@ -867,3 +867,16 @@ def test_run_gaps_inverted_range_errors():
     with pytest.raises(ConfigError):
         main(["run-gaps", "--since", "2026-06-05", "--until", "2026-06-01"], deps=deps)
     assert called["find_run_gaps"] is False
+
+
+def test_rescore_sandbox_command():
+    from ema_poc.playground.rescore import RescoreResult
+    calls = {}
+    def _rescore(conn, *, client, config):
+        calls["conn"] = conn; calls["client"] = client
+        return RescoreResult(scored=3, failed=1)
+    deps, out, _ = _fake_deps(rescore_sandbox=_rescore)
+    rc = main(["rescore-sandbox"], deps=deps)
+    assert rc == 0
+    assert calls["conn"] == "CONN" and calls["client"] == "CLIENT"
+    assert any("Rescored 3" in line and "failed 1" in line for line in out)
