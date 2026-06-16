@@ -501,6 +501,11 @@ button#run:disabled {
   gap: .3rem;
   margin: .4rem 0;
 }
+.score-fail {
+  color: #b00020;
+  font-size: .8rem;
+  margin: .4rem 0;
+}
 
 /* ---- Workspace: results + Recent questions side column ---- */
 .workspace {
@@ -730,7 +735,10 @@ function renderAnswerCard(ev) {
   card.querySelector(".answer").innerHTML = '<div class="md">' +
     renderMarkdown(ev.answer_text || ("(no answer — " + esc(ev.status) + ")")) + '</div>';
 
-  if (ev.competitive_position != null || ev.sentiment_score != null) {
+  if (ev.scoring_error) {
+    card.querySelector(".score").innerHTML =
+      "<div class='score-fail'>⚠ Scoring failed: " + esc(ev.scoring_error) + "</div>";
+  } else if (ev.competitive_position != null || ev.sentiment_score != null) {
     const color = POSCOLOR[ev.competitive_position] || "#eee";
     let html = "";
     if (ev.competitive_position != null) {

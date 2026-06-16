@@ -24,3 +24,10 @@ def test_index_is_self_contained():
         for line in HTML.splitlines():
             if marker in line:
                 assert "www.w3.org/2000/svg" in line, f"external resource: {line.strip()}"
+
+
+def test_index_renders_scoring_error():
+    from pathlib import Path
+    html = Path("ema_poc/web/static/index.html").read_text()
+    assert "scoring_error" in html
+    assert "Scoring failed" in html
