@@ -213,7 +213,7 @@ def collect_dataset(
             "citation_quality": None,
             "brand_mentions": bm,
             "scoring_rationale": d["scoring_rationale"] or None,
-            "scoring_error": d["scoring_error"],
+            "scoring_error": d.get("scoring_error") or None,
             "hallucination_risk": None,
             "hallucination_flags": [],
             "alert_reasons": [],

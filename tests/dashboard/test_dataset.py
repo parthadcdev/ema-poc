@@ -336,7 +336,7 @@ class TestUnscoredRecord:
 
 
 class TestExactKeyContract:
-    """Verify every record has exactly the 24 required keys."""
+    """Verify every record has exactly the 25 required keys."""
 
     REQUIRED_KEYS = {
         "response_id", "source", "timestamp_utc", "date", "llm_name", "grounded",
