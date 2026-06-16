@@ -875,8 +875,9 @@ def test_rescore_sandbox_command():
     def _rescore(conn, *, client, config):
         calls["conn"] = conn; calls["client"] = client
         return RescoreResult(scored=3, failed=1)
-    deps, out, _ = _fake_deps(rescore_sandbox=_rescore)
+    deps, out, fake_calls = _fake_deps(rescore_sandbox=_rescore)
     rc = main(["rescore-sandbox"], deps=deps)
     assert rc == 0
     assert calls["conn"] == "CONN" and calls["client"] == "CLIENT"
     assert any("Rescored 3" in line and "failed 1" in line for line in out)
+    assert fake_calls["validated"] is True

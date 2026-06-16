@@ -49,3 +49,27 @@ def test_rescore_idempotent_when_nothing_unscored(tmp_path):
     rescore_sandbox(c, scoring_client=object(), scorer=lambda *a, **k: FakeScore(), config=_cfg())
     res = rescore_sandbox(c, scoring_client=object(), scorer=lambda *a, **k: FakeScore(), config=_cfg())
     assert res == RescoreResult(scored=0, failed=0)
+
+
+def test_rescore_mixed_batch_isolates_per_item(tmp_path):
+    c = connect(str(tmp_path / "m.sqlite")); init_schema(c)
+    qid = S.create_query(c, question_text="q", persona=None, brand_focus="Skyrizi",
+                         now="t0", status="DONE", target_count=2, started_at="t0")
+    good = S.save_response(c, query_id=qid, llm_name="A", llm_model_version="v",
+                           grounded=False, answer_text="good answer", response_tokens=1,
+                           finish_reason="stop", status="SUCCESS", now="t1")
+    bad = S.save_response(c, query_id=qid, llm_name="B", llm_model_version="v",
+                          grounded=False, answer_text="bad answer", response_tokens=1,
+                          finish_reason="stop", status="SUCCESS", now="t1")
+
+    def scorer(client, *, response_text, **k):
+        if response_text == "bad answer":
+            raise RuntimeError("scorer blew up")
+        return FakeScore()
+
+    res = rescore_sandbox(c, scoring_client=object(), scorer=scorer, config=_cfg())
+    assert res == RescoreResult(scored=1, failed=1)
+    rows = {r["sandbox_response_id"]: r for r in
+            c.execute("SELECT sandbox_response_id, sentiment_score, scoring_error FROM sandbox_responses")}
+    assert rows[good]["sentiment_score"] == 0.5 and rows[good]["scoring_error"] is None
+    assert rows[bad]["sentiment_score"] is None and "scorer blew up" in rows[bad]["scoring_error"]
