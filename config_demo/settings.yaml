@@ -1,5 +1,5 @@
 settings:
-  db_path: ema.sqlite
+  db_path: ema_demo.sqlite
   schedule_cron: "0 2 * * *"      # daily 02:00 UTC (FR-502)
   max_retries: 3                  # FR-206
   samples_per_question: 3         # FR-212 consensus: triples per-run cost
