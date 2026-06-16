@@ -800,3 +800,8 @@ def test_responses_sorted_newest_first(html):
     assert ".sort(" in body, "renderResponses does not sort its rows"
     # descending: compares b before a on the timestamp
     assert "b.timestamp_utc" in body and "a.timestamp_utc" in body
+
+
+def test_responses_detail_shows_scoring_error(html):
+    assert "scoring_error" in html
+    assert "Scoring failed" in html

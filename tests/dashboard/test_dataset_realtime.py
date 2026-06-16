@@ -74,3 +74,25 @@ def test_monitoring_and_realtime_records_have_identical_keys(tmp_path):
     mon = next(r for r in ds["records"] if r["response_id"] == "m1")
     rt = next(r for r in ds["records"] if r["response_id"] == "sb-" + rid)
     assert set(mon.keys()) == set(rt.keys())
+
+
+def test_records_carry_scoring_error_key(tmp_path):
+    from ema_poc.db import connect, init_schema
+    from ema_poc.repositories import sandbox as S
+    from ema_poc.dashboard.dataset import collect_dataset
+    c = connect(str(tmp_path / "se.sqlite")); init_schema(c)
+    _seed_one_monitoring(c)
+    qid = S.create_query(c, question_text="rt", persona=None, brand_focus=None,
+                         now="2026-06-02T00:00:00+00:00", status="DONE",
+                         target_count=1, started_at="2026-06-02T00:00:00+00:00")
+    rid = S.save_response(c, query_id=qid, llm_name="X", llm_model_version="v",
+                          grounded=False, answer_text="a", response_tokens=1,
+                          finish_reason="stop", status="SUCCESS",
+                          now="2026-06-02T00:00:00+00:00")
+    S.set_response_scoring_error(c, sandbox_response_id=rid, error="credit balance too low")
+    ds = collect_dataset(c, abbvie_brands=ABBVIE, competitor_brands=COMP)
+    rt = next(r for r in ds["records"] if r["response_id"] == "sb-" + rid)
+    mon = next(r for r in ds["records"] if r["response_id"] == "m1")
+    assert rt["scoring_error"] == "credit balance too low"
+    assert mon["scoring_error"] is None
+    assert set(mon.keys()) == set(rt.keys())     # key parity preserved

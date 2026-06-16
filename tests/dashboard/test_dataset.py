@@ -344,6 +344,7 @@ class TestExactKeyContract:
         "brand_focus", "domain", "status", "response_text",
         "sentiment_score", "competitive_position", "confidence_level",
         "citation_quality", "brand_mentions", "scoring_rationale",
+        "scoring_error",
         "hallucination_risk", "hallucination_flags",
         "alert_reasons", "alert_triggered",
     }
