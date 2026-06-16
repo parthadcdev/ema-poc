@@ -100,6 +100,7 @@ def run_playground(
                         "scoring_rationale": result.scoring_rationale,
                     }
                 except Exception as exc:
+                    S.set_response_scoring_error(conn, rid, error=str(exc)[:500])
                     yield {"event": "score_error", "llm_name": adapter.name, "message": str(exc)}
 
     yield {"event": "done"}
