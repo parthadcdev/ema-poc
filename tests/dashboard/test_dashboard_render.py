@@ -815,3 +815,30 @@ def test_responses_detail_has_rescore_button(html):
     assert "rescore-btn" in html
     assert "/api/responses/" in html
     assert ("r.source === 'realtime'" in html) or ("r.source==='realtime'" in html)
+
+
+def test_rescore_button_is_gated_to_realtime_only():
+    # the rescore-btn markup must be emitted only inside the realtime conditional,
+    # never unconditionally — guard against a future edit that drops the gate.
+    import re
+    from pathlib import Path
+    src = Path("ema_poc/dashboard/render.py").read_text()
+    # find the renderResponses detail block; the rescore-btn must be preceded by the
+    # realtime gate on the same conditional expression
+    assert "rescore-btn" in src
+    # The first 'rescore-btn' occurrence may be in the CSS block; find the one inside
+    # the JS detail-rendering logic by looking for it following the realtime gate.
+    gate = "r.source === 'realtime'"
+    gate_alt = "r.source==='realtime'"
+    # locate the realtime gate used in JS detail rendering
+    gate_idx = src.find(gate)
+    if gate_idx == -1:
+        gate_idx = src.find(gate_alt)
+    assert gate_idx != -1, "realtime source gate not found in render.py"
+    # find the rescore-btn occurrence AFTER the gate
+    btn_idx = src.find("rescore-btn", gate_idx)
+    assert btn_idx != -1, "rescore-btn not found after the realtime gate"
+    # the gate must appear within ~200 chars before the button markup
+    window = src[max(0, btn_idx - 200):btn_idx]
+    assert gate in window or gate_alt in window, \
+        "rescore-btn is not gated by the realtime source check"
