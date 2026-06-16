@@ -85,3 +85,29 @@ def test_auth_enforced_on_jobs_routes(tmp_path):
     client = TestClient(create_app(d))
     assert client.get("/api/queries").status_code == 401
     assert client.get("/api/queries", auth=("abbvie", "pw")).status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Cache-control: dynamic, auth-gated pages must not be cached by the browser
+# (a stale/partial cached /dashboard renders empty dropdowns + analytics).
+# ---------------------------------------------------------------------------
+
+def test_dashboard_response_is_no_store(tmp_path):
+    client = TestClient(create_app(_deps(tmp_path)))
+    r = client.get("/dashboard")
+    assert r.status_code == 200
+    assert r.headers.get("cache-control") == "no-store"
+
+
+def test_index_response_is_no_store(tmp_path):
+    client = TestClient(create_app(_deps(tmp_path)))
+    r = client.get("/")
+    assert r.status_code == 200
+    assert r.headers.get("cache-control") == "no-store"
+
+
+def test_api_queries_response_is_no_store(tmp_path):
+    client = TestClient(create_app(_deps(tmp_path)))
+    r = client.get("/api/queries")
+    assert r.status_code == 200
+    assert r.headers.get("cache-control") == "no-store"

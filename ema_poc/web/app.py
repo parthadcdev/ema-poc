@@ -79,6 +79,17 @@ def create_app(deps: WebDeps) -> FastAPI:
     app = FastAPI(title="EMA Playground", dependencies=[Depends(_auth_dep)])
     app.state.rate_store = {}
 
+    @app.middleware("http")
+    async def _no_store(request, call_next):
+        # Every route here is dynamic + auth-gated: the dashboard is rebuilt per
+        # request from live data, and responses may contain pharma content. Tell the
+        # browser never to cache, so a stale or partial cached copy (e.g. one cut off
+        # during a redeploy) can't be re-served — which would render empty dropdowns
+        # and analytics.
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     app.state.jobs = JobManager(
         db_path=deps.db_path, build_adapters_for=deps.build_adapters_for,
         scoring_client=deps.scoring_client, scorer=deps.scorer, config=deps.config,
