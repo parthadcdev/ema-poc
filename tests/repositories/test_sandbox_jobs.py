@@ -111,3 +111,40 @@ def test_set_response_score_brand_mentions_defaults_null(tmp_path):
     raw = c.execute("SELECT brand_mentions FROM sandbox_responses WHERE sandbox_response_id=?",
                     (rid,)).fetchone()[0]
     assert raw is None
+
+
+def test_set_response_scoring_error_stores_and_score_clears(tmp_path):
+    c = _conn(tmp_path)
+    qid = S.create_query(c, question_text="q", persona=None, brand_focus="Skyrizi",
+                         now="t0", status="RUNNING", target_count=1, started_at="t0")
+    rid = S.save_response(c, query_id=qid, llm_name="A", llm_model_version="v",
+                          grounded=False, answer_text="a", response_tokens=1,
+                          finish_reason="stop", status="SUCCESS", now="t1")
+    S.set_response_scoring_error(c, sandbox_response_id=rid, error="credit balance too low")
+    got = S.list_query_responses(c, qid)[0]
+    assert got.scoring_error == "credit balance too low"
+    # a successful score clears the error
+    S.set_response_score(c, sandbox_response_id=rid, sentiment_score=0.5,
+                         competitive_position="LEADER", scoring_rationale="r",
+                         brand_mentions=["Skyrizi"])
+    got2 = S.list_query_responses(c, qid)[0]
+    assert got2.scoring_error is None and got2.sentiment_score == 0.5
+
+
+def test_list_unscored_sandbox_returns_only_rescore_candidates(tmp_path):
+    c = _conn(tmp_path)
+    qid = S.create_query(c, question_text="q", persona=None, brand_focus="Skyrizi",
+                         now="t0", status="RUNNING", target_count=3, started_at="t0")
+    cand = S.save_response(c, query_id=qid, llm_name="A", llm_model_version="v",
+                           grounded=False, answer_text="real answer", response_tokens=1,
+                           finish_reason="stop", status="SUCCESS", now="t1")
+    scored = S.save_response(c, query_id=qid, llm_name="B", llm_model_version="v",
+                             grounded=False, answer_text="x", response_tokens=1,
+                             finish_reason="stop", status="SUCCESS", now="t1")
+    S.set_response_score(c, sandbox_response_id=scored, sentiment_score=0.1,
+                         competitive_position="AMONG_OPTIONS", scoring_rationale="r")
+    S.save_response(c, query_id=qid, llm_name="C", llm_model_version="v",
+                    grounded=False, answer_text="", response_tokens=0,
+                    finish_reason="error", status="FAILED", now="t1")
+    ids = [r["sandbox_response_id"] for r in S.list_unscored_sandbox(c)]
+    assert ids == [cand]

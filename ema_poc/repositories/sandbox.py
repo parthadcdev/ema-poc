@@ -53,6 +53,7 @@ class SandboxResponse:
     competitive_position: str | None
     scoring_rationale: str | None
     created_at: str
+    scoring_error: str | None = None
     citations: list[Citation] = field(default_factory=list)
 
 
@@ -118,7 +119,7 @@ def set_response_score(
     cur = conn.execute(
         """UPDATE sandbox_responses
            SET sentiment_score = ?, competitive_position = ?, scoring_rationale = ?,
-               brand_mentions = ?
+               brand_mentions = ?, scoring_error = NULL
            WHERE sandbox_response_id = ?""",
         (sentiment_score, competitive_position, scoring_rationale,
          json.dumps(brand_mentions) if brand_mentions is not None else None,
@@ -128,6 +129,27 @@ def set_response_score(
         raise ValueError(f"No sandbox_response with id={sandbox_response_id!r}")
     if commit:
         conn.commit()
+
+
+def set_response_scoring_error(conn, sandbox_response_id, *, error, commit: bool = True) -> None:
+    cur = conn.execute(
+        "UPDATE sandbox_responses SET scoring_error = ? WHERE sandbox_response_id = ?",
+        (error, sandbox_response_id))
+    if cur.rowcount == 0:
+        raise ValueError(f"No sandbox_response with id={sandbox_response_id!r}")
+    if commit:
+        conn.commit()
+
+
+def list_unscored_sandbox(conn):
+    """Rescore candidates: SUCCESS responses with no score yet and non-empty text,
+    with their query's brand_focus. Returns sqlite Rows."""
+    return conn.execute(
+        """SELECT sr.sandbox_response_id, sr.answer_text, q.brand_focus
+           FROM sandbox_responses sr JOIN sandbox_queries q ON sr.query_id = q.query_id
+           WHERE sr.status = 'SUCCESS' AND sr.sentiment_score IS NULL
+             AND TRIM(COALESCE(sr.answer_text, '')) <> ''
+           ORDER BY sr.created_at, sr.sandbox_response_id""").fetchall()
 
 
 def mark_query_done(conn, query_id, *, finished_at, commit: bool = True) -> None:
@@ -191,6 +213,7 @@ def list_query_responses(conn, query_id) -> list[SandboxResponse]:
             status=d["status"], sentiment_score=d["sentiment_score"],
             competitive_position=d["competitive_position"],
             scoring_rationale=d["scoring_rationale"], created_at=d["created_at"],
+            scoring_error=d.get("scoring_error"),
             citations=_citations_for(conn, d["sandbox_response_id"]),
         ))
     return out
