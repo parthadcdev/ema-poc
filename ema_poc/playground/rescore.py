@@ -39,7 +39,9 @@ def _score_response_row(conn, sandbox_response_id, answer_text, brand_focus,
 
 
 def rescore_one(conn, sandbox_response_id, *, scoring_client, scorer, config) -> bool:
-    """Rescore a single sandbox response. Raises KeyError if the id is unknown."""
+    """Rescore a single sandbox response (any status) — overwrites any existing score
+    and clears scoring_error on success. Raises KeyError if the id is unknown; returns
+    True if scored, False if scoring failed (the reason is recorded as scoring_error)."""
     row = conn.execute(
         "SELECT sr.answer_text, q.brand_focus FROM sandbox_responses sr "
         "JOIN sandbox_queries q ON sr.query_id = q.query_id "
