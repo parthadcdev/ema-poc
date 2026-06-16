@@ -169,6 +169,19 @@ def collect_dataset(
     # ------------------------------------------------------------------ #
     # 7. Realtime playground (sandbox) responses — folded in, tagged      #
     # ------------------------------------------------------------------ #
+    # Bank-style question ids for realtime questions: RLT-<persona>-<NNN>,
+    # so they read consistently with the monitoring codes (e.g. NEU-PRV-027)
+    # instead of a raw query UUID. Stable per query, numbered by time order.
+    _RT_PERSONA = {"Provider": "PRV", "Patient": "PAT", "Prospect": "PRO"}
+    rt_code: dict[str, str] = {}
+    for _i, _qrow in enumerate(
+        conn.execute("SELECT query_id, persona FROM sandbox_queries "
+                     "ORDER BY timestamp_utc ASC, query_id ASC"),
+        start=1,
+    ):
+        _p = _RT_PERSONA.get(_qrow["persona"] or "", "GEN")
+        rt_code[_qrow["query_id"]] = f"RLT-{_p}-{_i:03d}"
+
     sandbox_rows = conn.execute(
         """
         SELECT sr.sandbox_response_id, sr.query_id, sr.llm_name, sr.grounded,
@@ -200,7 +213,7 @@ def collect_dataset(
             # infers it from the "-Grounded" llm_name suffix) — keep this column read.
             "grounded": bool(d["grounded"]),
             "persona": d["persona"],
-            "question_id": d["query_id"],
+            "question_id": rt_code.get(d["query_id"], d["query_id"]),
             "question_text": d["question_text"],
             "therapeutic_area": None,
             "brand_focus": d["brand_focus"],

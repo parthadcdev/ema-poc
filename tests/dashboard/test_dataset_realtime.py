@@ -96,3 +96,33 @@ def test_records_carry_scoring_error_key(tmp_path):
     assert rt["scoring_error"] == "credit balance too low"
     assert mon["scoring_error"] is None
     assert set(mon.keys()) == set(rt.keys())     # key parity preserved
+
+
+def test_realtime_question_id_is_bank_style(tmp_path):
+    from ema_poc.db import connect, init_schema
+    from ema_poc.repositories import sandbox as S
+    from ema_poc.dashboard.dataset import collect_dataset
+    c = connect(str(tmp_path / "qid.sqlite")); init_schema(c)
+    q1 = S.create_query(c, question_text="q1", persona="Prospect", brand_focus=None,
+                        now="2026-06-01T00:00:00+00:00", status="DONE", target_count=1,
+                        started_at="2026-06-01T00:00:00+00:00")
+    r1 = S.save_response(c, query_id=q1, llm_name="A", llm_model_version="v", grounded=False,
+                         answer_text="a", response_tokens=1, finish_reason="stop",
+                         status="SUCCESS", now="2026-06-01T00:00:00+00:00")
+    q2 = S.create_query(c, question_text="q2", persona="Patient", brand_focus=None,
+                        now="2026-06-02T00:00:00+00:00", status="DONE", target_count=1,
+                        started_at="2026-06-02T00:00:00+00:00")
+    r2 = S.save_response(c, query_id=q2, llm_name="B", llm_model_version="v", grounded=False,
+                         answer_text="b", response_tokens=1, finish_reason="stop",
+                         status="SUCCESS", now="2026-06-02T00:00:00+00:00")
+    q3 = S.create_query(c, question_text="q3", persona=None, brand_focus=None,
+                        now="2026-06-03T00:00:00+00:00", status="DONE", target_count=1,
+                        started_at="2026-06-03T00:00:00+00:00")
+    r3 = S.save_response(c, query_id=q3, llm_name="C", llm_model_version="v", grounded=False,
+                         answer_text="c", response_tokens=1, finish_reason="stop",
+                         status="SUCCESS", now="2026-06-03T00:00:00+00:00")
+    ds = collect_dataset(c, abbvie_brands=[], competitor_brands=[])
+    by_resp = {r["response_id"]: r for r in ds["records"]}
+    assert by_resp["sb-" + r1]["question_id"] == "RLT-PRO-001"   # Prospect, first
+    assert by_resp["sb-" + r2]["question_id"] == "RLT-PAT-002"   # Patient, second
+    assert by_resp["sb-" + r3]["question_id"] == "RLT-GEN-003"   # no persona -> GEN
