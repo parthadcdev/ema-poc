@@ -39,6 +39,7 @@ def _dataset():
                 "citation_quality": "HIGH",
                 "brand_mentions": ["Skyrizi"],
                 "scoring_rationale": "positive & clear evidence",
+                "scoring_error": "credit balance too low",
                 "hallucination_risk": "NONE",
                 "hallucination_flags": [],
                 "alert_reasons": ["DRIFT:sentiment_shift"],
@@ -64,6 +65,7 @@ def _dataset():
                 "citation_quality": None,
                 "brand_mentions": [],
                 "scoring_rationale": None,
+                "scoring_error": None,
                 "hallucination_risk": None,
                 "hallucination_flags": [],
                 "alert_reasons": [],
@@ -89,6 +91,7 @@ def _dataset():
                 "citation_quality": "MODERATE",
                 "brand_mentions": ["Skyrizi", "Humira"],
                 "scoring_rationale": "comparative analysis",
+                "scoring_error": None,
                 "hallucination_risk": "HIGH",
                 "hallucination_flags": [],
                 "alert_reasons": [],
@@ -800,3 +803,9 @@ def test_responses_sorted_newest_first(html):
     assert ".sort(" in body, "renderResponses does not sort its rows"
     # descending: compares b before a on the timestamp
     assert "b.timestamp_utc" in body and "a.timestamp_utc" in body
+
+
+def test_responses_detail_shows_scoring_error(html):
+    assert "scoring_error" in html
+    assert "Scoring failed" in html
+    assert "credit balance too low" in html   # the seeded value reaches the page

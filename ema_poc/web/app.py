@@ -182,6 +182,7 @@ def create_app(deps: WebDeps) -> FastAPI:
                  "finish_reason": r.finish_reason, "sentiment_score": r.sentiment_score,
                  "competitive_position": r.competitive_position,
                  "scoring_rationale": r.scoring_rationale,
+                 "scoring_error": r.scoring_error,
                  "citations": [{"title": c.title, "url": c.url, "snippet": c.snippet}
                                for c in r.citations]}
                 for r in responses]}

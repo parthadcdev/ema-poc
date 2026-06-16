@@ -47,6 +47,7 @@ class Deps:
     reject_question: Callable | None = None
     get_current: Callable | None = None
     find_run_gaps: Callable | None = None
+    rescore_sandbox: Callable | None = None
 
 
 def _make_scoring_client(env):
@@ -84,6 +85,8 @@ def default_deps() -> Deps:
         get_current,
     )
     from ema_poc.run_gaps import find_run_gaps
+    from ema_poc.playground.rescore import rescore_sandbox as _rescore_sandbox
+    from ema_poc.scoring.scorer import score_response as _score_response
 
     def _serve_app(app, *, host, port):
         import uvicorn
@@ -122,6 +125,8 @@ def default_deps() -> Deps:
         reject_question=reject_question,
         get_current=get_current,
         find_run_gaps=find_run_gaps,
+        rescore_sandbox=lambda conn, *, client, config: _rescore_sandbox(
+            conn, scoring_client=client, scorer=_score_response, config=config),
     )
 
 
@@ -189,6 +194,8 @@ def _parse_args(argv):
     p_gap.add_argument("--since", required=True, help="Window start (YYYY-MM-DD)")
     p_gap.add_argument("--until", default=None, help="Window end (YYYY-MM-DD, default today)")
 
+    sub.add_parser("rescore-sandbox", help="Rescore playground responses left unscored (e.g. after a scoring API failure)")
+
     return parser.parse_args(argv)
 
 
@@ -212,7 +219,7 @@ def main(argv=None, deps: Deps | None = None) -> int:
                 f"Invalid --backfill-for date: {backfill_for!r} (expected YYYY-MM-DD)"
             )
 
-    if args.command in ("run", "dry-run", "score", "healthcheck", "serve", "drift", "check-hallucinations", "suggest-questions"):
+    if args.command in ("run", "dry-run", "score", "healthcheck", "serve", "drift", "check-hallucinations", "suggest-questions", "rescore-sandbox"):
         deps.validate_credentials(config, deps.env)
 
     if args.command == "import-questions":
@@ -248,6 +255,13 @@ def main(argv=None, deps: Deps | None = None) -> int:
         client = deps.make_scoring_client(deps.env)
         scoring = deps.score_pending(conn, client=client, config=config)
         deps.out(f"Scored {scoring.scored}, alerts raised {scoring.alerts_raised}")
+        return 0
+
+    if args.command == "rescore-sandbox":
+        conn = _open_db(deps, config)
+        client = deps.make_scoring_client(deps.env)
+        r = deps.rescore_sandbox(conn, client=client, config=config)
+        deps.out(f"Rescored {r.scored}, still failed {r.failed}")
         return 0
 
     if args.command == "serve":

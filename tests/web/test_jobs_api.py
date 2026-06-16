@@ -111,3 +111,20 @@ def test_api_queries_response_is_no_store(tmp_path):
     r = client.get("/api/queries")
     assert r.status_code == 200
     assert r.headers.get("cache-control") == "no-store"
+
+
+def test_query_detail_includes_scoring_error(tmp_path):
+    from ema_poc.db import connect, init_schema
+    from ema_poc.repositories import sandbox as S
+    d = _deps(tmp_path)
+    c = connect(d.db_path); init_schema(c)
+    qid = S.create_query(c, question_text="q", persona=None, brand_focus=None, now="t0",
+                         status="DONE", target_count=1, started_at="t0")
+    rid = S.save_response(c, query_id=qid, llm_name="A", llm_model_version="v",
+                          grounded=False, answer_text="a", response_tokens=1,
+                          finish_reason="stop", status="SUCCESS", now="t1")
+    S.set_response_scoring_error(c, sandbox_response_id=rid, error="credit balance too low")
+    c.close()
+    client = TestClient(create_app(d))
+    detail = client.get(f"/api/queries/{qid}").json()
+    assert detail["responses"][0]["scoring_error"] == "credit balance too low"

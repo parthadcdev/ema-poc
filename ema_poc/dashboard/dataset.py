@@ -158,6 +158,7 @@ def collect_dataset(
             "citation_quality": citation_quality,
             "brand_mentions": brand_mentions,
             "scoring_rationale": scoring_rationale,
+            "scoring_error": None,
             "hallucination_risk": halluc_risk.get(rid),
             "hallucination_flags": halluc_flags.get(rid, []),
             "alert_reasons": reasons,
@@ -172,7 +173,7 @@ def collect_dataset(
         """
         SELECT sr.sandbox_response_id, sr.query_id, sr.llm_name, sr.grounded,
                sr.answer_text, sr.status, sr.sentiment_score, sr.competitive_position,
-               sr.scoring_rationale, sr.brand_mentions,
+               sr.scoring_rationale, sr.brand_mentions, sr.scoring_error,
                q.timestamp_utc, q.question_text, q.persona, q.brand_focus
         FROM sandbox_responses sr
         JOIN sandbox_queries q ON sr.query_id = q.query_id
@@ -212,6 +213,7 @@ def collect_dataset(
             "citation_quality": None,
             "brand_mentions": bm,
             "scoring_rationale": d["scoring_rationale"] or None,
+            "scoring_error": d.get("scoring_error") or None,
             "hallucination_risk": None,
             "hallucination_flags": [],
             "alert_reasons": [],

@@ -1141,6 +1141,9 @@ function renderResponses(rows){
       "<div><div class='dl'>Source</div><div class='dv'>"+esc(r.source==='realtime'?'Realtime':'Monitoring')+"</div></div>" +
       "<div><div class='dl'>Response</div><div class='md'>"+renderMarkdown(r.response_text||'')+"</div></div>" +
       "<div><div class='dl'>Scoring Rationale</div><div class='md'>"+renderMarkdown(rationale)+"</div></div>" +
+      (r.scoring_error
+        ? "<div><div class='dl'>Scoring failed</div><div class='dv'>"+esc(r.scoring_error)+"</div></div>"
+        : "") +
       "</div>";
     body += "<tr class='detail' style='display:none'><td colspan='11'>"+detail+"</td></tr>";
   });
