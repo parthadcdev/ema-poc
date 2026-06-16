@@ -1099,6 +1099,11 @@ function renderMedical(rows){
    renderResponses
    ==================================================================== */
 function renderResponses(rows){
+  /* Newest first: collect_dataset appends realtime records after the monitoring
+     rows, so without this sort recent runs land at the bottom of the table. */
+  rows = rows.slice().sort(function(a, b){
+    return (b.timestamp_utc || '').localeCompare(a.timestamp_utc || '');
+  });
   var head = "<thead><tr>" +
     "<th>Time</th><th>Question</th><th>LLM</th><th>Persona</th>" +
     "<th>Brand</th><th>Status</th><th>Sentiment</th><th>Position</th>" +

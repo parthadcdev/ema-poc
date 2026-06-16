@@ -787,3 +787,16 @@ def test_brand_dropdown_includes_configured_brands(html):
     assert "brandOptions()" in html
     # the union pulls from the embedded configured brand lists
     assert "DATA.abbvie_brands" in html and "DATA.competitor_brands" in html
+
+
+def test_responses_sorted_newest_first(html):
+    # renderResponses must sort rows by timestamp DESCENDING so recent runs (incl.
+    # realtime, which collect_dataset appends last) surface at the top of the table
+    # instead of being buried at the bottom.
+    import re
+    m = re.search(r"function renderResponses\(rows\)\{(.*?)\n\}", html, re.S)
+    assert m, "renderResponses not found"
+    body = m.group(1)
+    assert ".sort(" in body, "renderResponses does not sort its rows"
+    # descending: compares b before a on the timestamp
+    assert "b.timestamp_utc" in body and "a.timestamp_utc" in body
