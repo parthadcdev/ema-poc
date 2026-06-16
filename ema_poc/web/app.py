@@ -204,6 +204,8 @@ def create_app(deps: WebDeps) -> FastAPI:
             except KeyError:
                 raise HTTPException(status_code=404, detail="response not found")
             r = S.get_sandbox_response(conn, sandbox_response_id)
+            if r is None:
+                raise HTTPException(status_code=404, detail="response not found")
         finally:
             conn.close()
         return {"sentiment_score": r.sentiment_score,
