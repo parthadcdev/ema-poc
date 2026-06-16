@@ -778,3 +778,12 @@ def test_dashboard_has_result_count(html):
     assert "id='f-count'" in html
     assert "Showing " in html                      # render() sets "Showing N of M"
     assert "DATA.records.length" in html           # the M in N of M
+
+
+def test_brand_dropdown_includes_configured_brands(html):
+    # The Brand filter must list configured brands (e.g. newly-added ones like the
+    # Lupron franchises), not only brands that happen to appear in the data.
+    assert "function brandOptions" in html
+    assert "brandOptions()" in html
+    # the union pulls from the embedded configured brand lists
+    assert "DATA.abbvie_brands" in html and "DATA.competitor_brands" in html

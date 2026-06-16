@@ -493,8 +493,18 @@ function populate(id, values){
   });
 }
 
+/* Brand options = brands seen in the data UNION the configured brand lists, so a
+   configured brand (e.g. a newly-added one) is always selectable even before any
+   run has targeted it. */
+function brandOptions(){
+  return Array.from(new Set(
+    distinct('brand_focus')
+      .concat(DATA.abbvie_brands || [], DATA.competitor_brands || [])
+  )).sort();
+}
+
 populate('f-ta',      distinct('therapeutic_area'));
-populate('f-brand',   distinct('brand_focus'));
+populate('f-brand',   brandOptions());
 populate('f-llm',     distinct('llm_name'));
 populate('f-persona', distinct('persona'));
 
