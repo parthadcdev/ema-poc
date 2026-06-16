@@ -809,3 +809,9 @@ def test_responses_detail_shows_scoring_error(html):
     assert "scoring_error" in html
     assert "Scoring failed" in html
     assert "credit balance too low" in html   # the seeded value reaches the page
+
+
+def test_responses_detail_has_rescore_button(html):
+    assert "rescore-btn" in html
+    assert "/api/responses/" in html
+    assert ("r.source === 'realtime'" in html) or ("r.source==='realtime'" in html)

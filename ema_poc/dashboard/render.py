@@ -154,6 +154,9 @@ body{
 }
 #f-reset:hover{border-color:var(--accent-deep);color:var(--accent-deep);background:rgba(7,29,73,.06)}
 #f-reset:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.rescore-btn{font-family:var(--sans);font-size:12px;cursor:pointer;padding:.3rem .8rem;border:1px solid var(--rule);border-radius:var(--radius);background:var(--surface-2);color:var(--ink-soft)}
+.rescore-btn:hover{border-color:var(--accent-deep);color:var(--accent-deep)}
+.rescore-btn:disabled{opacity:.6;cursor:default}
 .filter-count{font-family:var(--sans);font-size:12px;color:var(--ink-faint);align-self:flex-end;padding-bottom:.45rem}
 
 /* ---- Content area ---- */
@@ -1144,6 +1147,10 @@ function renderResponses(rows){
       (r.scoring_error
         ? "<div><div class='dl'>Scoring failed</div><div class='dv'>"+esc(r.scoring_error)+"</div></div>"
         : "") +
+      (r.source === 'realtime'
+        ? "<div><div class='dl'>Rescore</div><div class='dv'><button class='rescore-btn' data-id='"
+          + esc(r.response_id.replace(/^sb-/, '')) + "'>Rescore</button></div></div>"
+        : "") +
       "</div>";
     body += "<tr class='detail' style='display:none'><td colspan='11'>"+detail+"</td></tr>";
   });
@@ -1164,6 +1171,27 @@ function renderResponses(rows){
         det.style.display = (!det.style.display || det.style.display === 'none')
           ? 'table-row' : 'none';
       }
+    });
+  });
+
+  document.querySelectorAll('#view-responses .rescore-btn').forEach(function(btn){
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      var id = btn.getAttribute('data-id');
+      btn.disabled = true; btn.textContent = 'Rescoring…';
+      fetch('/api/responses/' + encodeURIComponent(id) + '/rescore', {method:'POST'})
+        .then(function(res){ if(!res.ok) throw new Error('HTTP '+res.status); return res.json(); })
+        .then(function(data){
+          var rec = DATA.records.filter(function(x){ return x.response_id === 'sb-'+id; })[0];
+          if(rec){
+            rec.sentiment_score = data.sentiment_score;
+            rec.competitive_position = data.competitive_position;
+            rec.scoring_rationale = data.scoring_rationale;
+            rec.scoring_error = data.scoring_error;
+          }
+          render();
+        })
+        .catch(function(){ btn.disabled = false; btn.textContent = 'Rescore (retry)'; });
     });
   });
 }
