@@ -73,3 +73,33 @@ def test_rescore_mixed_batch_isolates_per_item(tmp_path):
             c.execute("SELECT sandbox_response_id, sentiment_score, scoring_error FROM sandbox_responses")}
     assert rows[good]["sentiment_score"] == 0.5 and rows[good]["scoring_error"] is None
     assert rows[bad]["sentiment_score"] is None and "scorer blew up" in rows[bad]["scoring_error"]
+
+
+from ema_poc.playground.rescore import rescore_one
+
+
+def test_rescore_one_scores_and_clears(tmp_path):
+    c, rid = _seed_unscored(tmp_path)
+    S.set_response_scoring_error(c, sandbox_response_id=rid, error="old")
+    ok = rescore_one(c, rid, scoring_client=object(),
+                     scorer=lambda *a, **k: FakeScore(), config=_cfg())
+    assert ok is True
+    got = S.get_sandbox_response(c, rid)
+    assert got.sentiment_score == 0.5 and got.scoring_error is None
+
+
+def test_rescore_one_records_error(tmp_path):
+    c, rid = _seed_unscored(tmp_path)
+    def boom(*a, **k): raise RuntimeError("still no credits")
+    ok = rescore_one(c, rid, scoring_client=object(), scorer=boom, config=_cfg())
+    assert ok is False
+    got = S.get_sandbox_response(c, rid)
+    assert got.sentiment_score is None and "still no credits" in got.scoring_error
+
+
+def test_rescore_one_unknown_id_raises_keyerror(tmp_path):
+    c, _ = _seed_unscored(tmp_path)
+    import pytest
+    with pytest.raises(KeyError):
+        rescore_one(c, "nope", scoring_client=object(),
+                    scorer=lambda *a, **k: FakeScore(), config=_cfg())

@@ -197,6 +197,20 @@ def _citations_for(conn, sandbox_response_id) -> list[Citation]:
     return [Citation(title=r["title"], url=r["url"], snippet=r["snippet"]) for r in rows]
 
 
+def _response_from_row(conn, d: dict) -> SandboxResponse:
+    return SandboxResponse(
+        sandbox_response_id=d["sandbox_response_id"], query_id=d["query_id"],
+        llm_name=d["llm_name"], llm_model_version=d["llm_model_version"],
+        grounded=bool(d["grounded"]), answer_text=d["answer_text"],
+        response_tokens=d["response_tokens"], finish_reason=d["finish_reason"],
+        status=d["status"], sentiment_score=d["sentiment_score"],
+        competitive_position=d["competitive_position"],
+        scoring_rationale=d["scoring_rationale"], created_at=d["created_at"],
+        scoring_error=d.get("scoring_error"),
+        citations=_citations_for(conn, d["sandbox_response_id"]),
+    )
+
+
 def list_query_responses(conn, query_id) -> list[SandboxResponse]:
     rows = conn.execute(
         """SELECT * FROM sandbox_responses WHERE query_id = ? ORDER BY created_at, sandbox_response_id""",
@@ -204,19 +218,14 @@ def list_query_responses(conn, query_id) -> list[SandboxResponse]:
     ).fetchall()
     out = []
     for r in rows:
-        d = dict(r)
-        out.append(SandboxResponse(
-            sandbox_response_id=d["sandbox_response_id"], query_id=d["query_id"],
-            llm_name=d["llm_name"], llm_model_version=d["llm_model_version"],
-            grounded=bool(d["grounded"]), answer_text=d["answer_text"],
-            response_tokens=d["response_tokens"], finish_reason=d["finish_reason"],
-            status=d["status"], sentiment_score=d["sentiment_score"],
-            competitive_position=d["competitive_position"],
-            scoring_rationale=d["scoring_rationale"], created_at=d["created_at"],
-            scoring_error=d.get("scoring_error"),
-            citations=_citations_for(conn, d["sandbox_response_id"]),
-        ))
+        out.append(_response_from_row(conn, dict(r)))
     return out
+
+
+def get_sandbox_response(conn, sandbox_response_id) -> SandboxResponse | None:
+    r = conn.execute("SELECT * FROM sandbox_responses WHERE sandbox_response_id = ?",
+                     (sandbox_response_id,)).fetchone()
+    return _response_from_row(conn, dict(r)) if r is not None else None
 
 
 def list_recent_queries(conn, limit: int = 25) -> list[QuerySummary]:

@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from ema_poc.dashboard.dataset import collect_dataset
 from ema_poc.dashboard.render import render_dashboard_html
 from ema_poc.db import connect, init_schema
+from ema_poc.playground import rescore as _rescore
 from ema_poc.playground.jobs import JobManager
 from ema_poc.repositories import sandbox as S
 
@@ -186,6 +187,31 @@ def create_app(deps: WebDeps) -> FastAPI:
                  "citations": [{"title": c.title, "url": c.url, "snippet": c.snippet}
                                for c in r.citations]}
                 for r in responses]}
+
+    @app.post("/api/responses/{sandbox_response_id}/rescore")
+    def rescore_response(request: Request, sandbox_response_id: str):
+        cap = int((deps.env or {}).get("PLAYGROUND_MAX_QUERIES_PER_HOUR", "60") or "60")
+        ip = request.client.host if request.client else "unknown"
+        if not _check_rate(app.state.rate_store, ip, cap, time.time()):
+            raise HTTPException(status_code=429, detail="Query limit reached — try again later.")
+        conn = connect(deps.db_path)
+        try:
+            init_schema(conn)
+            try:
+                _rescore.rescore_one(conn, sandbox_response_id,
+                                     scoring_client=deps.scoring_client,
+                                     scorer=deps.scorer, config=deps.config)
+            except KeyError:
+                raise HTTPException(status_code=404, detail="response not found")
+            r = S.get_sandbox_response(conn, sandbox_response_id)
+            if r is None:
+                raise HTTPException(status_code=404, detail="response not found")
+        finally:
+            conn.close()
+        return {"sentiment_score": r.sentiment_score,
+                "competitive_position": r.competitive_position,
+                "scoring_rationale": r.scoring_rationale,
+                "scoring_error": r.scoring_error}
 
     app.state.deps = deps
     return app

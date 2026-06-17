@@ -128,3 +128,60 @@ def test_query_detail_includes_scoring_error(tmp_path):
     client = TestClient(create_app(d))
     detail = client.get(f"/api/queries/{qid}").json()
     assert detail["responses"][0]["scoring_error"] == "credit balance too low"
+
+
+def test_rescore_endpoint_scores_response(tmp_path):
+    from ema_poc.db import connect, init_schema
+    from ema_poc.repositories import sandbox as S
+    d = _deps(tmp_path)
+    c = connect(d.db_path); init_schema(c)
+    qid = S.create_query(c, question_text="q", persona=None, brand_focus=None, now="t0",
+                         status="DONE", target_count=1, started_at="t0")
+    rid = S.save_response(c, query_id=qid, llm_name="A", llm_model_version="v",
+                          grounded=False, answer_text="ans", response_tokens=1,
+                          finish_reason="stop", status="SUCCESS", now="t1")
+    S.set_response_scoring_error(c, sandbox_response_id=rid, error="old"); c.close()
+    client = TestClient(create_app(d))
+    r = client.post(f"/api/responses/{rid}/rescore")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["sentiment_score"] == 0.5 and body["scoring_error"] is None
+    c2 = connect(d.db_path); init_schema(c2)
+    assert S.get_sandbox_response(c2, rid).sentiment_score == 0.5
+
+
+def test_rescore_endpoint_reports_scoring_error(tmp_path):
+    from ema_poc.db import connect, init_schema
+    from ema_poc.repositories import sandbox as S
+    d = _deps(tmp_path)
+    d.scorer = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("credit balance too low"))
+    c = connect(d.db_path); init_schema(c)
+    qid = S.create_query(c, question_text="q", persona=None, brand_focus=None, now="t0",
+                         status="DONE", target_count=1, started_at="t0")
+    rid = S.save_response(c, query_id=qid, llm_name="A", llm_model_version="v",
+                          grounded=False, answer_text="ans", response_tokens=1,
+                          finish_reason="stop", status="SUCCESS", now="t1"); c.close()
+    client = TestClient(create_app(d))
+    r = client.post(f"/api/responses/{rid}/rescore")
+    assert r.status_code == 200
+    assert "credit balance too low" in r.json()["scoring_error"]
+
+
+def test_rescore_endpoint_unknown_id_404(tmp_path):
+    client = TestClient(create_app(_deps(tmp_path)))
+    assert client.post("/api/responses/nope/rescore").status_code == 404
+
+
+def test_rescore_endpoint_rate_limited(tmp_path):
+    from ema_poc.db import connect, init_schema
+    from ema_poc.repositories import sandbox as S
+    d = _deps(tmp_path, env={"PLAYGROUND_MAX_QUERIES_PER_HOUR": "1"})
+    c = connect(d.db_path); init_schema(c)
+    qid = S.create_query(c, question_text="q", persona=None, brand_focus=None, now="t0",
+                         status="DONE", target_count=1, started_at="t0")
+    rid = S.save_response(c, query_id=qid, llm_name="A", llm_model_version="v",
+                          grounded=False, answer_text="ans", response_tokens=1,
+                          finish_reason="stop", status="SUCCESS", now="t1"); c.close()
+    client = TestClient(create_app(d))
+    assert client.post(f"/api/responses/{rid}/rescore").status_code == 200
+    assert client.post(f"/api/responses/{rid}/rescore").status_code == 429
